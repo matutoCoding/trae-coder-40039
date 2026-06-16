@@ -141,6 +141,15 @@ export default function HeatingFurnace() {
     setFilterFurnaceNo('');
   };
 
+  const handleClearSelection = () => {
+    setFilterSlabNo('');
+    setFilterSteelGrade('');
+    setFilterStartDate('');
+    setFilterEndDate('');
+    setFilterFurnaceNo('');
+    clearCurrentSelection();
+  };
+
   const furnaceInfoList: FurnaceInfo[] = useMemo(() => {
     const inFurnaceRecords = filteredHeatingRecords.filter((r) => !r.outTime);
 
@@ -299,7 +308,7 @@ export default function HeatingFurnace() {
               )}
             </button>
             <button
-              onClick={clearCurrentSelection}
+              onClick={handleClearSelection}
               className="inline-flex items-center gap-1.5 h-8 px-3 bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white text-sm font-medium rounded-md transition-colors"
             >
               <X className="w-4 h-4" />

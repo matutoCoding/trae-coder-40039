@@ -127,6 +127,14 @@ export default function FinishingMill() {
     setEndDate('');
   };
 
+  const handleClearSelection = () => {
+    setSearchSlabNo('');
+    setSteelGradeFilter('all');
+    setStartDate('');
+    setEndDate('');
+    clearCurrentSelection();
+  };
+
   const avgFinishingTemp = records.length > 0
     ? records.reduce((sum, r) => sum + r.finishingTemp, 0) / records.length
     : 0;
@@ -286,7 +294,7 @@ export default function FinishingMill() {
               )}
             </button>
             <button
-              onClick={clearCurrentSelection}
+              onClick={handleClearSelection}
               className="inline-flex items-center gap-1.5 h-8 px-3 bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white text-sm font-medium rounded-md transition-colors"
             >
               <X className="w-4 h-4" />

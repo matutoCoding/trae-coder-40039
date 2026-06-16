@@ -43,6 +43,11 @@ import {
   Legend,
   ComposedChart,
   Line,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar,
 } from 'recharts';
 
 const SLAB_COLORS = [
@@ -69,17 +74,14 @@ export default function SlabCompare() {
     removeCompareSlab,
     clearCompareSlabs,
     getEntitiesBySlabNo,
+    setCurrentSlabNo,
   } = useStore();
 
   const [showAddModal, setShowAddModal] = useState(false);
 
   const effectiveCompareSlabNos = useMemo(() => {
-    if (compareSlabNos.length > 0) {
-      return compareSlabNos;
-    }
-    const finishedSlabs = slabs.filter((s) => s.status === 'finished').slice(0, 4);
-    return finishedSlabs.map((s) => s.slabNo);
-  }, [compareSlabNos, slabs]);
+    return compareSlabNos;
+  }, [compareSlabNos]);
 
   const compareData: CompareData[] = useMemo(() => {
     return effectiveCompareSlabNos
@@ -298,6 +300,215 @@ export default function SlabCompare() {
     return formatNumber(num);
   };
 
+  const groupInfo = useMemo(() => {
+    if (compareData.length === 0) return null;
+    const steelGrades = [...new Set(compareData.map((d) => d.slab.steelGrade))];
+    const thicknesses = compareData.map((d) => d.slab.thickness);
+    const widths = compareData.map((d) => d.slab.width);
+    const maxThickness = Math.max(...thicknesses);
+    const minThickness = Math.min(...thicknesses);
+    const maxWidth = Math.max(...widths);
+    const minWidth = Math.min(...widths);
+    const sameSteelGrade = steelGrades.length === 1;
+    const sameSpec = maxThickness - minThickness <= 5 && maxWidth - minWidth <= 50;
+
+    let steelGradeLabel: string;
+    let steelGradeColor: string;
+    if (sameSteelGrade) {
+      steelGradeLabel = `同钢种对比：${steelGrades[0]}`;
+      steelGradeColor = 'bg-green-500/15 border-green-500/30 text-green-400';
+    } else {
+      steelGradeLabel = `跨钢种对比：${steelGrades.join(' / ')}`;
+      steelGradeColor = 'bg-orange-500/15 border-orange-500/30 text-orange-400';
+    }
+
+    let specLabel: string;
+    let specColor: string;
+    if (sameSpec) {
+      specLabel = `同规格对比：${minThickness}~${maxThickness}×${minWidth}~${maxWidth}mm`;
+      specColor = 'bg-green-500/15 border-green-500/30 text-green-400';
+    } else {
+      specLabel = `跨规格对比：${minThickness}~${maxThickness}×${minWidth}~${maxWidth}mm`;
+      specColor = 'bg-orange-500/15 border-orange-500/30 text-orange-400';
+    }
+
+    return { steelGradeLabel, steelGradeColor, specLabel, specColor };
+  }, [compareData]);
+
+  interface DeviationRow {
+    rank: number;
+    slabNo: string;
+    steelGrade: string;
+    tempDeviation: number;
+    thicknessDeviation: number;
+    performanceDeviation: number;
+    overallDeviation: number;
+    rating: string;
+    ratingColor: string;
+  }
+
+  const deviationRankings = useMemo((): DeviationRow[] => {
+    if (compareData.length < 2) return [];
+
+    const calcDeviationPct = (values: (number | null | undefined)[]): number[] => {
+      const numeric = values.filter((v): v is number => typeof v === 'number' && v > 0);
+      if (numeric.length < 2) return values.map(() => 0);
+      const avg = numeric.reduce((a, b) => a + b, 0) / numeric.length;
+      return values.map((v) => {
+        if (typeof v !== 'number' || v <= 0) return 0;
+        return (Math.abs(v - avg) / avg) * 100;
+      });
+    };
+
+    const dischargeTemps = compareData.map((d) => d.heating?.dischargeTemp);
+    const finishingTemps = compareData.map((d) => d.finishing?.finishingTemp);
+    const coilingTemps = compareData.map((d) => d.coiling?.coilingTemp);
+    const avgThicknesses = compareData.map((d) =>
+      d.finishing ? (d.finishing.headThickness + d.finishing.midThickness + d.finishing.tailThickness) / 3 : null
+    );
+    const crowns = compareData.map((d) => d.finishing?.crown);
+    const yieldStrengths = compareData.map((d) => d.inspection?.yieldStrength);
+    const tensileStrengths = compareData.map((d) => d.inspection?.tensileStrength);
+    const elongations = compareData.map((d) => d.inspection?.elongation);
+    const impactEnergies = compareData.map((d) => d.inspection?.impactEnergy);
+
+    const dischargeDev = calcDeviationPct(dischargeTemps);
+    const finishingDev = calcDeviationPct(finishingTemps);
+    const coilingDev = calcDeviationPct(coilingTemps);
+    const thicknessDev = calcDeviationPct(avgThicknesses);
+    const crownDev = calcDeviationPct(crowns);
+    const yieldDev = calcDeviationPct(yieldStrengths);
+    const tensileDev = calcDeviationPct(tensileStrengths);
+    const elongationDev = calcDeviationPct(elongations);
+    const impactDev = calcDeviationPct(impactEnergies);
+
+    const rows: Omit<DeviationRow, 'rank'>[] = compareData.map((d, i) => {
+      const tempDevArr = [dischargeDev[i], finishingDev[i], coilingDev[i]].filter((v) => v > 0);
+      const tempDev = tempDevArr.length > 0 ? tempDevArr.reduce((a, b) => a + b, 0) / tempDevArr.length : 0;
+
+      const thickDevArr = [thicknessDev[i], crownDev[i]].filter((v) => v > 0);
+      const thickDev = thickDevArr.length > 0 ? thickDevArr.reduce((a, b) => a + b, 0) / thickDevArr.length : 0;
+
+      const perfDevArr = [yieldDev[i], tensileDev[i], elongationDev[i], impactDev[i]].filter((v) => v > 0);
+      const perfDev = perfDevArr.length > 0 ? perfDevArr.reduce((a, b) => a + b, 0) / perfDevArr.length : 0;
+
+      const allDevArr = [tempDev, thickDev, perfDev].filter((v) => v > 0);
+      const overallDev = allDevArr.length > 0 ? allDevArr.reduce((a, b) => a + b, 0) / allDevArr.length : 0;
+
+      let rating: string;
+      let ratingColor: string;
+      if (overallDev < 1.5) {
+        rating = '★★★★★ 最稳定';
+        ratingColor = 'text-green-400';
+      } else if (overallDev < 3) {
+        rating = '★★★★';
+        ratingColor = 'text-blue-400';
+      } else if (overallDev < 5) {
+        rating = '★★★';
+        ratingColor = 'text-orange-400';
+      } else {
+        rating = '★★';
+        ratingColor = 'text-red-400';
+      }
+
+      return {
+        slabNo: d.slab.slabNo,
+        steelGrade: d.slab.steelGrade,
+        tempDeviation: Number(tempDev.toFixed(2)),
+        thicknessDeviation: Number(thickDev.toFixed(2)),
+        performanceDeviation: Number(perfDev.toFixed(2)),
+        overallDeviation: Number(overallDev.toFixed(2)),
+        rating,
+        ratingColor,
+      };
+    });
+
+    rows.sort((a, b) => a.overallDeviation - b.overallDeviation);
+
+    return rows.map((row, idx) => ({ ...row, rank: idx + 1 }));
+  }, [compareData]);
+
+  const radarData = useMemo(() => {
+    if (compareData.length < 2) return [];
+
+    const calcDeviationPct = (values: (number | null | undefined)[]): number[] => {
+      const numeric = values.filter((v): v is number => typeof v === 'number' && v > 0);
+      if (numeric.length < 2) return values.map(() => 0);
+      const avg = numeric.reduce((a, b) => a + b, 0) / numeric.length;
+      return values.map((v) => {
+        if (typeof v !== 'number' || v <= 0) return 0;
+        return (Math.abs(v - avg) / avg) * 100;
+      });
+    };
+
+    const dischargeTemps = compareData.map((d) => d.heating?.dischargeTemp);
+    const finishingTemps = compareData.map((d) => d.finishing?.finishingTemp);
+    const coilingTemps = compareData.map((d) => d.coiling?.coilingTemp);
+    const avgThicknesses = compareData.map((d) =>
+      d.finishing ? (d.finishing.headThickness + d.finishing.midThickness + d.finishing.tailThickness) / 3 : null
+    );
+    const crowns = compareData.map((d) => d.finishing?.crown);
+    const yieldStrengths = compareData.map((d) => d.inspection?.yieldStrength);
+    const tensileStrengths = compareData.map((d) => d.inspection?.tensileStrength);
+    const elongations = compareData.map((d) => d.inspection?.elongation);
+    const impactEnergies = compareData.map((d) => d.inspection?.impactEnergy);
+
+    const dischargeDev = calcDeviationPct(dischargeTemps);
+    const finishingDev = calcDeviationPct(finishingTemps);
+    const coilingDev = calcDeviationPct(coilingTemps);
+    const thicknessDev = calcDeviationPct(avgThicknesses);
+    const crownDev = calcDeviationPct(crowns);
+    const yieldDev = calcDeviationPct(yieldStrengths);
+    const tensileDev = calcDeviationPct(tensileStrengths);
+    const elongationDev = calcDeviationPct(elongations);
+    const impactDev = calcDeviationPct(impactEnergies);
+
+    const slabScores = compareData.map((_, i) => {
+      const tempDevArr = [dischargeDev[i], finishingDev[i], coilingDev[i]].filter((v) => v > 0);
+      const tempAvg = tempDevArr.length > 0 ? tempDevArr.reduce((a, b) => a + b, 0) / tempDevArr.length : 10;
+      const tempScore = Math.min(100, Math.max(0, 100 - tempAvg * 10));
+
+      const thickDevArr = [thicknessDev[i], crownDev[i]].filter((v) => v > 0);
+      const thickAvg = thickDevArr.length > 0 ? thickDevArr.reduce((a, b) => a + b, 0) / thickDevArr.length : 10;
+      const thickScore = Math.min(100, Math.max(0, 100 - thickAvg * 10));
+
+      const perfDevArr = [yieldDev[i], tensileDev[i], elongationDev[i], impactDev[i]].filter((v) => v > 0);
+      const perfAvg = perfDevArr.length > 0 ? perfDevArr.reduce((a, b) => a + b, 0) / perfDevArr.length : 10;
+      const perfScore = Math.min(100, Math.max(0, 100 - perfAvg * 10));
+
+      const qualifiedBonus = compareData[i].inspection?.result === 'qualified' ? 10 : 0;
+      const overallScore = Math.min(100, (tempScore + thickScore + perfScore) / 3 + qualifiedBonus);
+
+      return {
+        tempScore: Number(tempScore.toFixed(1)),
+        thickScore: Number(thickScore.toFixed(1)),
+        perfScore: Number(perfScore.toFixed(1)),
+        overallScore: Number(overallScore.toFixed(1)),
+      };
+    });
+
+    const dimensions = [
+      { key: 'tempScore', label: '温度稳定性' },
+      { key: 'thickScore', label: '厚度精度' },
+      { key: 'perfScore', label: '力学性能' },
+      { key: 'overallScore', label: '综合合格率' },
+    ];
+
+    return dimensions.map((dim) => {
+      const entry: Record<string, string | number> = { dimension: dim.label };
+      slabScores.forEach((score, idx) => {
+        const slab = compareData[idx].slab;
+        entry[slab.slabNo] = score[dim.key as keyof typeof score];
+      });
+      return entry;
+    });
+  }, [compareData]);
+
+  const handleSlabClick = (slabNo: string) => {
+    setCurrentSlabNo(slabNo);
+    navigate('/slab-charging');
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -343,7 +554,14 @@ export default function SlabCompare() {
           </div>
         }
       >
-        {effectiveCompareSlabNos.length < 2 ? (
+        {effectiveCompareSlabNos.length === 0 ? (
+          <div className="py-8 text-center">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-amber-500/10 border border-amber-500/20 rounded-md text-amber-400 text-sm">
+              <Flame className="w-4 h-4" />
+              请从其他模块勾选板坯加入对比，或点击上方添加按钮
+            </div>
+          </div>
+        ) : effectiveCompareSlabNos.length < 2 ? (
           <div className="py-6 text-center">
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-amber-500/10 border border-amber-500/20 rounded-md text-amber-400 text-sm">
               <Flame className="w-4 h-4" />
@@ -356,21 +574,27 @@ export default function SlabCompare() {
               const color = SLAB_COLORS[idx % SLAB_COLORS.length];
               return (
                 <div
-                  key={d.slab.slabNo}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-md border ${color.bg} ${color.border}`}
-                >
-                  <div className={`w-3 h-3 rounded-full ${color.bg.replace('/20', '')}`} style={{ backgroundColor: color.fill }} />
-                  <div className="flex flex-col">
-                    <span className={`font-mono text-sm font-medium ${color.text}`}>{d.slab.slabNo}</span>
-                    <span className="text-gray-400 text-xs">{d.slab.steelGrade}</span>
-                  </div>
-                  <button
-                    onClick={() => removeCompareSlab(d.slab.slabNo)}
-                    className={`ml-2 w-5 h-5 rounded flex items-center justify-center ${color.text} hover:bg-white/10 transition-colors`}
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
+                key={d.slab.slabNo}
+                className={`flex items-center gap-2 px-3 py-2 rounded-md border ${color.bg} ${color.border} cursor-pointer hover:border-opacity-80 hover:ring-2 hover:ring-offset-0 hover:border-white/40 transition-all`}
+                onClick={() => handleSlabClick(d.slab.slabNo)}
+                title="查看完整生产履历"
+              >
+                <div className={`w-3 h-3 rounded-full ${color.bg.replace('/20', '')}`} style={{ backgroundColor: color.fill }} />
+                <div className="flex flex-col">
+                  <span className={`font-mono text-sm font-medium ${color.text}`}>{d.slab.slabNo}</span>
+                  <span className="text-gray-400 text-xs">{d.slab.steelGrade}</span>
                 </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeCompareSlab(d.slab.slabNo);
+                  }}
+                  className={`ml-2 w-5 h-5 rounded flex items-center justify-center ${color.text} hover:bg-white/10 transition-colors`}
+                  title="移除对比"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
               );
             })}
           </div>
@@ -410,7 +634,7 @@ export default function SlabCompare() {
                         color: '#e2e8f0',
                       }}
                       labelStyle={{ color: '#f97316' }}
-                      formatter={(value: any, name: string) => {
+                      formatter={(value: string | number, name: string) => {
                         const map: Record<string, string> = {
                           preheatTemp: '预热段',
                           heatingTemp: '加热段',
@@ -432,10 +656,6 @@ export default function SlabCompare() {
                         return <span className="text-xs text-gray-400">{map[value] || value}</span>;
                       }}
                     />
-                    {heatingChartData.map((_, idx) => {
-                      const color = SLAB_COLORS[idx % SLAB_COLORS.length];
-                      return null;
-                    })}
                     <Bar dataKey="preheatTemp" fill="#f97316" name="preheatTemp" radius={[2, 2, 0, 0]} barSize={14} />
                     <Bar dataKey="heatingTemp" fill="#3b82f6" name="heatingTemp" radius={[2, 2, 0, 0]} barSize={14} />
                     <Bar dataKey="soakingTemp" fill="#22c55e" name="soakingTemp" radius={[2, 2, 0, 0]} barSize={14} />
@@ -474,7 +694,7 @@ export default function SlabCompare() {
                         color: '#e2e8f0',
                       }}
                       labelStyle={{ color: '#f97316' }}
-                      formatter={(value: any, name: string) => {
+                      formatter={(value: string | number, name: string) => {
                         const map: Record<string, string> = {
                           headThickness: '头部厚度',
                           midThickness: '中部厚度',
@@ -546,7 +766,7 @@ export default function SlabCompare() {
                         color: '#e2e8f0',
                       }}
                       labelStyle={{ color: '#f97316' }}
-                      formatter={(value: any, name: string) => {
+                      formatter={(value: string | number, name: string) => {
                         const map: Record<string, string> = {
                           coilingTemp: '卷取温度',
                           targetTemp: '目标温度',
@@ -630,7 +850,7 @@ export default function SlabCompare() {
                         color: '#e2e8f0',
                       }}
                       labelStyle={{ color: '#f97316' }}
-                      formatter={(value: any, name: string) => {
+                      formatter={(value: string | number, name: string) => {
                         const map: Record<string, { label: string; unit: string }> = {
                           yieldStrength: { label: '屈服强度', unit: 'MPa' },
                           tensileStrength: { label: '抗拉强度', unit: 'MPa' },
@@ -778,6 +998,114 @@ export default function SlabCompare() {
                 </tbody>
               </table>
             </div>
+          </SectionCard>
+
+          <SectionCard
+            title="差异分析与稳定性排名"
+            subtitle="各板坯指标偏差分析与生产稳定性综合评估"
+            icon={<BarChart3 className="w-5 h-5" />}
+          >
+            {groupInfo && (
+              <div className="flex flex-wrap gap-3 mb-6">
+                <span className={`inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium border ${groupInfo.steelGradeColor}`}>
+                  {groupInfo.steelGradeLabel}
+                </span>
+                <span className={`inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium border ${groupInfo.specColor}`}>
+                  {groupInfo.specLabel}
+                </span>
+              </div>
+            )}
+
+            {deviationRankings.length > 0 && (
+              <div className="overflow-x-auto mb-6">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-gray-400 text-left border-b border-gray-700">
+                      <th className="pb-3 font-medium w-16">排名</th>
+                      <th className="pb-3 font-medium">板坯号</th>
+                      <th className="pb-3 font-medium">钢种</th>
+                      <th className="pb-3 font-medium text-right">温度偏差%</th>
+                      <th className="pb-3 font-medium text-right">厚度偏差%</th>
+                      <th className="pb-3 font-medium text-right">性能偏差%</th>
+                      <th className="pb-3 font-medium text-right">综合偏差%</th>
+                      <th className="pb-3 font-medium">稳定性评级</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {deviationRankings.map((row) => (
+                      <tr key={row.slabNo} className="border-b border-gray-800 hover:bg-gray-800/30 transition-colors">
+                        <td className="py-3 pr-4 text-gray-300 font-medium font-mono">
+                          {row.rank === 1 ? (
+                            <span className="text-yellow-400 font-bold">#{row.rank}</span>
+                          ) : (
+                            <span className="text-gray-400">#{row.rank}</span>
+                          )}
+                        </td>
+                        <td className="py-3 pr-4 font-mono text-orange-400">{row.slabNo}</td>
+                        <td className="py-3 pr-4 text-gray-300">{row.steelGrade}</td>
+                        <td className="py-3 pr-4 text-right font-mono text-gray-300">{row.tempDeviation.toFixed(2)}%</td>
+                        <td className="py-3 pr-4 text-right font-mono text-gray-300">{row.thicknessDeviation.toFixed(2)}%</td>
+                        <td className="py-3 pr-4 text-right font-mono text-gray-300">{row.performanceDeviation.toFixed(2)}%</td>
+                        <td className="py-3 pr-4 text-right font-mono text-gray-300">{row.overallDeviation.toFixed(2)}%</td>
+                        <td className={`py-3 pr-4 font-semibold ${row.ratingColor}`}>{row.rating}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {radarData.length > 0 && (
+              <div>
+                <div className="text-gray-400 text-xs mb-3">四维稳定性雷达图（越靠外表示越稳定）</div>
+                <div className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RadarChart data={radarData}>
+                      <PolarGrid stroke="#334155" />
+                      <PolarAngleAxis
+                        dataKey="dimension"
+                        tick={{ fill: '#94a3b8', fontSize: 11 }}
+                      />
+                      <PolarRadiusAxis
+                        stroke="#64748b"
+                        tick={{ fill: '#64748b', fontSize: 10 }}
+                        domain={[0, 100]}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#1e293b',
+                          border: '1px solid #334155',
+                          borderRadius: '6px',
+                          color: '#e2e8f0',
+                        }}
+                        formatter={(value: string | number) => [`${value}`, '']}
+                      />
+                      <Legend
+                        wrapperStyle={{ color: '#94a3b8' }}
+                        formatter={(value: string) => {
+                          return <span className="text-xs text-gray-400 font-mono">{value.slice(-5)}</span>;
+                        }}
+                      />
+                      {compareData.map((_, idx) => {
+                        const color = SLAB_COLORS[idx % SLAB_COLORS.length];
+                        const slab = compareData[idx].slab;
+                        return (
+                          <Radar
+                            key={slab.slabNo}
+                            name={slab.slabNo}
+                            dataKey={slab.slabNo}
+                            stroke={color.fill}
+                            fill={color.fill}
+                            fillOpacity={0.25}
+                            strokeWidth={2}
+                          />
+                        );
+                      })}
+                    </RadarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
           </SectionCard>
         </>
       )}

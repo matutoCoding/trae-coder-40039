@@ -115,6 +115,14 @@ export default function Coiling() {
     setEndDate('');
   };
 
+  const handleClearSelection = () => {
+    setSearchCoilNo('');
+    setSteelGradeFilter('all');
+    setStartDate('');
+    setEndDate('');
+    clearCurrentSelection();
+  };
+
   const todayCount = records.length;
 
   const avgCoilingTemp = useMemo(() => {
@@ -279,7 +287,7 @@ export default function Coiling() {
               )}
             </button>
             <button
-              onClick={clearCurrentSelection}
+              onClick={handleClearSelection}
               className="inline-flex items-center gap-1.5 h-8 px-3 bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white text-sm font-medium rounded-md transition-colors"
             >
               <X className="w-4 h-4" />

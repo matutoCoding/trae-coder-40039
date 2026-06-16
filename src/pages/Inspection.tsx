@@ -70,6 +70,10 @@ export default function Inspection() {
       .filter(Boolean) as typeof slabs;
   }, [compareSlabNos, slabs]);
 
+  const handleClearSelection = () => {
+    clearCurrentSelection();
+  };
+
   const records: InspectionRecord[] = useMemo(
     () =>
       currentSlabNo
@@ -240,7 +244,7 @@ export default function Inspection() {
               )}
             </button>
             <button
-              onClick={clearCurrentSelection}
+              onClick={handleClearSelection}
               className="inline-flex items-center gap-1.5 h-8 px-3 bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white text-sm font-medium rounded-md transition-colors"
             >
               <X className="w-4 h-4" />
