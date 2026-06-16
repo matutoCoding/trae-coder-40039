@@ -1,0 +1,324 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-steel-50: #e6edf5;
+  --color-steel-100: #c2d4e8;
+  --color-steel-200: #9ab8d8;
+  --color-steel-300: #6d9ac6;
+  --color-steel-400: #4a7eb6;
+  --color-steel-500: #1e3a5f;
+  --color-steel-600: #1a3252;
+  --color-steel-700: #152944;
+  --color-steel-800: #102036;
+  --color-steel-900: #0b1728;
+
+  --color-warm-50: #fef3ec;
+  --color-warm-100: #fde0cd;
+  --color-warm-200: #fbc9a7;
+  --color-warm-300: #f8af7c;
+  --color-warm-400: #f49555;
+  --color-warm-500: #e86a2c;
+  --color-warm-600: #d45d25;
+  --color-warm-700: #bb4f20;
+  --color-warm-800: #a0411b;
+  --color-warm-900: #843516;
+
+  --color-safe-50: #e8f7ec;
+  --color-safe-100: #c4eacf;
+  --color-safe-200: #9bdbad;
+  --color-safe-300: #6fcb89;
+  --color-safe-400: #4cbf6c;
+  --color-safe-500: #2ea043;
+  --color-safe-600: #288a3b;
+  --color-safe-700: #227433;
+  --color-safe-800: #1b5e2a;
+  --color-safe-900: #154821;
+
+  --color-alert-50: #fde8e8;
+  --color-alert-100: #f9c5c5;
+  --color-alert-200: #f49d9d;
+  --color-alert-300: #ed7070;
+  --color-alert-400: #e74b4b;
+  --color-alert-500: #dc2626;
+  --color-alert-600: #c62121;
+  --color-alert-700: #ac1c1c;
+  --color-alert-800: #921818;
+  --color-alert-900: #781313;
+
+  --color-data-50: #eaf2ff;
+  --color-data-100: #cfe0ff;
+  --color-data-200: #a6c8ff;
+  --color-data-300: #78aeff;
+  --color-data-400: #5597ff;
+  --color-data-500: #3b82f6;
+  --color-data-600: #3272dd;
+  --color-data-700: #2a61c0;
+  --color-data-800: #2250a1;
+  --color-data-900: #1b3f82;
+
+  --color-bg: #0f172a;
+  --color-panel: #1e293b;
+  --color-border: #334155;
+  --color-text: #e2e8f0;
+  --color-text-muted: #94a3b8;
+
+  --font-family-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+  --font-family-mono: "JetBrains Mono", "Fira Code", Consolas, Monaco, monospace;
+  --font-family-numeric: "JetBrains Mono", "Fira Code", Consolas, monospace;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-family-sans);
+    line-height: 1.5;
+    font-weight: 400;
+    color: var(--color-text);
+    background-color: var(--color-bg);
+
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    margin: 0;
+    min-width: 320px;
+    min-height: 100vh;
+    background-color: var(--color-bg);
+    color: var(--color-text);
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    color: var(--color-text);
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  a {
+    color: var(--color-data-400);
+    text-decoration: none;
+    transition: color 0.2s ease;
+  }
+
+  a:hover {
+    color: var(--color-data-300);
+  }
+
+  button {
+    font-family: inherit;
+    cursor: pointer;
+  }
+
+  input, textarea, select {
+    font-family: inherit;
+  }
+
+  ::selection {
+    background-color: var(--color-steel-500);
+    color: var(--color-text);
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--color-bg);
+    border-left: 1px solid var(--color-border);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-steel-600);
+    border-radius: 4px;
+    border: 2px solid var(--color-bg);
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-steel-500);
+  }
+
+  ::-webkit-scrollbar-corner {
+    background: var(--color-bg);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-steel-600) var(--color-bg);
+  }
+}
+
+@layer components {
+  .industrial-panel {
+    @apply bg-industrial-panel border border-industrial-border rounded-md shadow-industrial;
+  }
+
+  .industrial-panel-header {
+    @apply px-4 py-3 border-b border-industrial-border bg-steel-900/40;
+  }
+
+  .industrial-panel-title {
+    @apply text-sm font-semibold text-industrial-text uppercase tracking-wider;
+  }
+
+  .industrial-panel-body {
+    @apply p-4;
+  }
+
+  .industrial-table {
+    @apply w-full border-collapse;
+  }
+
+  .industrial-table thead th {
+    @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-industrial-text-muted bg-steel-900/60 border-b border-industrial-border;
+  }
+
+  .industrial-table tbody td {
+    @apply px-4 py-3 text-sm text-industrial-text border-b border-industrial-border/50;
+  }
+
+  .industrial-table tbody tr:nth-child(odd) {
+    @apply bg-industrial-panel;
+  }
+
+  .industrial-table tbody tr:nth-child(even) {
+    @apply bg-steel-900/30;
+  }
+
+  .industrial-table tbody tr:hover {
+    @apply bg-steel-800/50;
+  }
+
+  .industrial-status-dot {
+    @apply inline-block w-2.5 h-2.5 rounded-full;
+  }
+
+  .industrial-status-dot.running {
+    @apply bg-safe-500 shadow-glow-safe animate-pulse-slow;
+  }
+
+  .industrial-status-dot.warning {
+    @apply bg-warm-500 shadow-glow-warm animate-pulse-fast;
+  }
+
+  .industrial-status-dot.error {
+    @apply bg-alert-500 shadow-glow-alert animate-blink;
+  }
+
+  .industrial-status-dot.idle {
+    @apply bg-industrial-text-muted;
+  }
+
+  .industrial-btn {
+    @apply inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 border border-industrial-border bg-industrial-panel text-industrial-text hover:bg-steel-700 hover:border-steel-500;
+  }
+
+  .industrial-btn-primary {
+    @apply bg-steel-500 border-steel-400 text-white hover:bg-steel-400;
+  }
+
+  .industrial-btn-warm {
+    @apply bg-warm-600 border-warm-500 text-white hover:bg-warm-500;
+  }
+
+  .industrial-btn-safe {
+    @apply bg-safe-600 border-safe-500 text-white hover:bg-safe-500;
+  }
+
+  .industrial-btn-alert {
+    @apply bg-alert-600 border-alert-500 text-white hover:bg-alert-500;
+  }
+
+  .industrial-btn-data {
+    @apply bg-data-600 border-data-500 text-white hover:bg-data-500;
+  }
+
+  .industrial-input {
+    @apply w-full px-3 py-2 text-sm bg-steel-900/60 border border-industrial-border rounded-md text-industrial-text placeholder-industrial-text-muted focus:outline-none focus:ring-2 focus:ring-data-500/50 focus:border-data-500;
+  }
+
+  .industrial-badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium;
+  }
+
+  .industrial-badge-steel {
+    @apply bg-steel-500/20 text-steel-200 border border-steel-500/40;
+  }
+
+  .industrial-badge-warm {
+    @apply bg-warm-500/20 text-warm-200 border border-warm-500/40;
+  }
+
+  .industrial-badge-safe {
+    @apply bg-safe-500/20 text-safe-200 border border-safe-500/40;
+  }
+
+  .industrial-badge-alert {
+    @apply bg-alert-500/20 text-alert-200 border border-alert-500/40;
+  }
+
+  .industrial-badge-data {
+    @apply bg-data-500/20 text-data-200 border border-data-500/40;
+  }
+
+  .industrial-card {
+    @apply bg-industrial-panel border border-industrial-border rounded-lg shadow-industrial overflow-hidden;
+  }
+
+  .industrial-metric-value {
+    @apply font-numeric text-3xl font-bold text-industrial-text tracking-tight;
+  }
+
+  .industrial-metric-label {
+    @apply text-xs uppercase tracking-wider text-industrial-text-muted font-medium;
+  }
+
+  .industrial-divider {
+    @apply h-px bg-industrial-border my-4;
+  }
+
+  .industrial-scanline {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .industrial-scanline::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--color-data-500), transparent);
+    animation: scanline 2s linear infinite;
+    opacity: 0.6;
+    pointer-events: none;
+  }
+
+  .industrial-grid-bg {
+    background-image:
+      linear-gradient(var(--color-border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--color-border) 1px, transparent 1px);
+    background-size: 20px 20px;
+    background-color: var(--color-bg);
+    opacity: 0.08;
+  }
+
+  .industrial-border-glow {
+    box-shadow: 0 0 0 1px var(--color-data-500), 0 0 10px var(--color-data-500);
+  }
+}
+
+@layer utilities {
+  .font-numeric {
+    font-family: var(--font-family-numeric);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .text-shadow-glow {
+    text-shadow: 0 0 8px currentColor;
+  }
+}
