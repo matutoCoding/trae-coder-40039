@@ -8,6 +8,7 @@ import FinishingMill from '@/pages/FinishingMill';
 import LaminarCooling from '@/pages/LaminarCooling';
 import Coiling from '@/pages/Coiling';
 import Inspection from '@/pages/Inspection';
+import SlabCompare from '@/pages/SlabCompare';
 
 export default function App() {
   return (
@@ -82,6 +83,14 @@ export default function App() {
           element={
             <Layout>
               <Inspection />
+            </Layout>
+          }
+        />
+        <Route
+          path="/slab-compare"
+          element={
+            <Layout>
+              <SlabCompare />
             </Layout>
           }
         />

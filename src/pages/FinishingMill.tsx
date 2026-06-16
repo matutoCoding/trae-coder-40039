@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useStore } from '@/store/useStore';
 import SectionCard from '@/components/common/SectionCard';
 import DataCard from '@/components/common/DataCard';
@@ -15,6 +16,12 @@ import {
   Filter,
   RotateCcw,
   Calendar,
+  CheckSquare,
+  Square,
+  X,
+  GitCompare,
+  XCircle,
+  Info,
 } from 'lucide-react';
 import type { FinishingRecord } from '@/types';
 import {
@@ -39,7 +46,32 @@ import {
 } from 'recharts';
 
 export default function FinishingMill() {
-  const { finishingRecords, currentSlabNo, getEntitiesBySlabNo, coilingRecords, slabs } = useStore();
+  const navigate = useNavigate();
+  const {
+    finishingRecords,
+    currentSlabNo,
+    getEntitiesBySlabNo,
+    coilingRecords,
+    slabs,
+    setCurrentSlabNo,
+    clearCurrentSelection,
+    compareSlabNos,
+    toggleCompareSlab,
+    clearCompareSlabs,
+  } = useStore();
+
+  const currentSlab = useMemo(() => {
+    if (!currentSlabNo) return null;
+    return slabs.find((s) => s.slabNo === currentSlabNo) || null;
+  }, [currentSlabNo, slabs]);
+
+  const isCurrentInCompare = currentSlabNo ? compareSlabNos.includes(currentSlabNo) : false;
+
+  const compareSlabList = useMemo(() => {
+    return compareSlabNos
+      .map((no) => slabs.find((s) => s.slabNo === no))
+      .filter(Boolean) as typeof slabs;
+  }, [compareSlabNos, slabs]);
 
   const [searchSlabNo, setSearchSlabNo] = useState('');
   const [steelGradeFilter, setSteelGradeFilter] = useState('all');
@@ -174,11 +206,93 @@ export default function FinishingMill() {
         </div>
       </div>
 
-      {currentSlabNo && (
-        <div className="text-sm text-gray-400">
-          当前板坯: <span className="text-orange-400 font-mono">{currentSlabNo}</span>
-          <span className="mx-2 text-gray-600">|</span>
-          钢卷号: <span className="text-data-400 font-mono">{getCoilNo(currentSlabNo)}</span>
+      {compareSlabList.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 p-4 bg-[#1e293b] border border-orange-600/40 rounded-lg">
+          <div className="flex items-center gap-2">
+            <GitCompare className="w-4 h-4 text-orange-400" />
+            <span className="text-sm text-gray-300">
+              已选择 <span className="text-orange-400 font-bold">{compareSlabList.length}</span>/4 块板坯对比
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {compareSlabList.map((slab) => (
+              <div
+                key={slab.slabNo}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-orange-500/15 border border-orange-500/40 rounded-md text-sm"
+              >
+                <span className="text-orange-300 font-mono">{slab.slabNo}</span>
+                <span className="text-gray-400">·</span>
+                <span className="text-gray-300">{slab.steelGrade}</span>
+                <button
+                  onClick={() => toggleCompareSlab(slab.slabNo)}
+                  className="ml-1 p-0.5 hover:bg-orange-500/30 rounded transition-colors"
+                >
+                  <X className="w-3 h-3 text-orange-400" />
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 ml-auto">
+            {compareSlabList.length >= 2 && (
+              <button
+                onClick={() => navigate('/slab-compare')}
+                className="inline-flex items-center gap-1.5 h-8 px-3 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white text-sm font-medium rounded-md transition-colors"
+              >
+                <GitCompare className="w-4 h-4" />
+                跳转对比视图
+              </button>
+            )}
+            <button
+              onClick={clearCompareSlabs}
+              className="inline-flex items-center gap-1 h-8 px-3 bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white text-sm font-medium rounded-md transition-colors"
+            >
+              <XCircle className="w-4 h-4" />
+              清空对比
+            </button>
+          </div>
+        </div>
+      )}
+
+      {currentSlab && (
+        <div className="flex flex-wrap items-center gap-3 p-4 bg-[#1e293b] border border-amber-600/40 rounded-lg">
+          <div className="flex items-center gap-2">
+            <Info className="w-4 h-4 text-amber-400" />
+            <span className="text-sm text-gray-300">
+              当前选择：
+              <span className="text-amber-400 font-mono font-bold ml-1">{currentSlab.slabNo}</span>
+              <span className="text-gray-500 mx-2">·</span>
+              <span className="text-gray-200">{currentSlab.steelGrade}</span>
+            </span>
+          </div>
+          <div className="flex items-center gap-2 ml-auto">
+            <button
+              onClick={() => toggleCompareSlab(currentSlab.slabNo)}
+              className={`inline-flex items-center gap-1.5 h-8 px-3 text-sm font-medium rounded-md transition-colors ${
+                isCurrentInCompare
+                  ? 'bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/40'
+                  : 'bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/40'
+              }`}
+            >
+              {isCurrentInCompare ? (
+                <>
+                  <XCircle className="w-4 h-4" />
+                  移出对比
+                </>
+              ) : (
+                <>
+                  <GitCompare className="w-4 h-4" />
+                  加入对比
+                </>
+              )}
+            </button>
+            <button
+              onClick={clearCurrentSelection}
+              className="inline-flex items-center gap-1.5 h-8 px-3 bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white text-sm font-medium rounded-md transition-colors"
+            >
+              <X className="w-4 h-4" />
+              清除选择
+            </button>
+          </div>
         </div>
       )}
 
@@ -560,6 +674,9 @@ export default function FinishingMill() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-gray-400 text-left border-b border-gray-700">
+                  <th className="pb-3 w-10 font-medium">
+                    <span className="sr-only">对比</span>
+                  </th>
                   <th className="pb-3 font-medium">钢卷号</th>
                   <th className="pb-3 font-medium">凸度(μm)</th>
                   <th className="pb-3 font-medium">楔形(μm)</th>
@@ -570,8 +687,33 @@ export default function FinishingMill() {
               <tbody>
                 {records.slice().reverse().slice(0, 10).map((record) => {
                   const status = getShapeStatus(record);
+                  const isSelected = currentSlabNo === record.slabNo;
+                  const isInCompare = compareSlabNos.includes(record.slabNo);
                   return (
-                    <tr key={record.id} className="border-b border-gray-800 hover:bg-gray-800/50">
+                    <tr
+                      key={record.id}
+                      onClick={() => setCurrentSlabNo(record.slabNo)}
+                      className={`border-b transition-colors cursor-pointer ${
+                        isSelected
+                          ? 'bg-orange-500/10 border-orange-500/40 hover:bg-orange-500/15'
+                          : 'border-gray-800 hover:bg-gray-800/50'
+                      }`}
+                    >
+                      <td className="py-2.5 pr-4 w-10">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleCompareSlab(record.slabNo);
+                          }}
+                          className="p-1 hover:bg-gray-700/50 rounded transition-colors"
+                        >
+                          {isInCompare ? (
+                            <CheckSquare className="w-5 h-5 text-orange-400" />
+                          ) : (
+                            <Square className="w-5 h-5 text-gray-500" />
+                          )}
+                        </button>
+                      </td>
                       <td className="py-2.5 pr-4 text-white font-mono text-xs">{getCoilNo(record.slabNo)}</td>
                       <td className="py-2.5 pr-4 text-gray-300 font-numeric">{formatNumber(record.crown, 1)}</td>
                       <td className="py-2.5 pr-4 text-gray-300 font-numeric">{formatNumber(record.wedge, 1)}</td>
@@ -597,6 +739,9 @@ export default function FinishingMill() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-gray-400 text-left border-b border-gray-700">
+                <th className="pb-3 w-10 font-medium">
+                  <span className="sr-only">对比</span>
+                </th>
                 <th className="pb-3 font-medium">板坯号/钢卷号</th>
                 <th className="pb-3 font-medium">终轧温度(℃)</th>
                 <th className="pb-3 font-medium">头厚(mm)</th>
@@ -615,8 +760,33 @@ export default function FinishingMill() {
                   && Math.abs(record.tailThickness - record.midThickness) <= record.midThickness * 0.015;
                 const shapeOk = record.crown <= 60 && record.wedge <= 25 && record.flatness <= 50;
                 const overallOk = tempOk && thicknessOk && shapeOk;
+                const isSelected = currentSlabNo === record.slabNo;
+                const isInCompare = compareSlabNos.includes(record.slabNo);
                 return (
-                  <tr key={record.id} className="border-b border-gray-800 hover:bg-gray-800/50">
+                  <tr
+                    key={record.id}
+                    onClick={() => setCurrentSlabNo(record.slabNo)}
+                    className={`border-b transition-colors cursor-pointer ${
+                      isSelected
+                        ? 'bg-orange-500/10 border-orange-500/40 hover:bg-orange-500/15'
+                        : 'border-gray-800 hover:bg-gray-800/50'
+                    }`}
+                  >
+                    <td className="py-3 pr-4 w-10">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleCompareSlab(record.slabNo);
+                        }}
+                        className="p-1 hover:bg-gray-700/50 rounded transition-colors"
+                      >
+                        {isInCompare ? (
+                          <CheckSquare className="w-5 h-5 text-orange-400" />
+                        ) : (
+                          <Square className="w-5 h-5 text-gray-500" />
+                        )}
+                      </button>
+                    </td>
                     <td className="py-3 pr-4">
                       <div className="text-white font-mono text-xs">{record.slabNo}</div>
                       <div className="text-data-400 font-mono text-xs mt-0.5">{getCoilNo(record.slabNo)}</div>

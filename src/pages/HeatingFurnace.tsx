@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useStore } from '@/store/useStore';
-import { Search, RotateCcw } from 'lucide-react';
+import { Search, RotateCcw, CheckSquare, Square, X, GitCompare, XCircle, Info } from 'lucide-react';
 import SectionCard from '@/components/common/SectionCard';
 import StatusBadge from '@/components/common/StatusBadge';
 import DataCard from '@/components/common/DataCard';
@@ -59,7 +60,30 @@ interface FurnaceInfo {
 }
 
 export default function HeatingFurnace() {
-  const { heatingRecords, slabs, setCurrentSlabNo, currentSlabNo } = useStore();
+  const navigate = useNavigate();
+  const {
+    heatingRecords,
+    slabs,
+    setCurrentSlabNo,
+    currentSlabNo,
+    clearCurrentSelection,
+    compareSlabNos,
+    toggleCompareSlab,
+    clearCompareSlabs,
+  } = useStore();
+
+  const currentSlab = useMemo(() => {
+    if (!currentSlabNo) return null;
+    return slabs.find((s) => s.slabNo === currentSlabNo) || null;
+  }, [currentSlabNo, slabs]);
+
+  const isCurrentInCompare = currentSlabNo ? compareSlabNos.includes(currentSlabNo) : false;
+
+  const compareSlabList = useMemo(() => {
+    return compareSlabNos
+      .map((no) => slabs.find((s) => s.slabNo === no))
+      .filter(Boolean) as typeof slabs;
+  }, [compareSlabNos, slabs]);
 
   const [filterSlabNo, setFilterSlabNo] = useState('');
   const [filterSteelGrade, setFilterSteelGrade] = useState('');
@@ -194,6 +218,96 @@ export default function HeatingFurnace() {
           <p className="text-gray-400 text-sm">加热炉运行监控与板坯加热过程管理</p>
         </div>
       </div>
+
+      {compareSlabList.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 p-4 bg-[#1e293b] border border-orange-600/40 rounded-lg">
+          <div className="flex items-center gap-2">
+            <GitCompare className="w-4 h-4 text-orange-400" />
+            <span className="text-sm text-gray-300">
+              已选择 <span className="text-orange-400 font-bold">{compareSlabList.length}</span>/4 块板坯对比
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {compareSlabList.map((slab) => (
+              <div
+                key={slab.slabNo}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-orange-500/15 border border-orange-500/40 rounded-md text-sm"
+              >
+                <span className="text-orange-300 font-mono">{slab.slabNo}</span>
+                <span className="text-gray-400">·</span>
+                <span className="text-gray-300">{slab.steelGrade}</span>
+                <button
+                  onClick={() => toggleCompareSlab(slab.slabNo)}
+                  className="ml-1 p-0.5 hover:bg-orange-500/30 rounded transition-colors"
+                >
+                  <X className="w-3 h-3 text-orange-400" />
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 ml-auto">
+            {compareSlabList.length >= 2 && (
+              <button
+                onClick={() => navigate('/slab-compare')}
+                className="inline-flex items-center gap-1.5 h-8 px-3 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white text-sm font-medium rounded-md transition-colors"
+              >
+                <GitCompare className="w-4 h-4" />
+                跳转对比视图
+              </button>
+            )}
+            <button
+              onClick={clearCompareSlabs}
+              className="inline-flex items-center gap-1 h-8 px-3 bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white text-sm font-medium rounded-md transition-colors"
+            >
+              <XCircle className="w-4 h-4" />
+              清空对比
+            </button>
+          </div>
+        </div>
+      )}
+
+      {currentSlab && (
+        <div className="flex flex-wrap items-center gap-3 p-4 bg-[#1e293b] border border-amber-600/40 rounded-lg">
+          <div className="flex items-center gap-2">
+            <Info className="w-4 h-4 text-amber-400" />
+            <span className="text-sm text-gray-300">
+              当前选择：
+              <span className="text-amber-400 font-mono font-bold ml-1">{currentSlab.slabNo}</span>
+              <span className="text-gray-500 mx-2">·</span>
+              <span className="text-gray-200">{currentSlab.steelGrade}</span>
+            </span>
+          </div>
+          <div className="flex items-center gap-2 ml-auto">
+            <button
+              onClick={() => toggleCompareSlab(currentSlab.slabNo)}
+              className={`inline-flex items-center gap-1.5 h-8 px-3 text-sm font-medium rounded-md transition-colors ${
+                isCurrentInCompare
+                  ? 'bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/40'
+                  : 'bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/40'
+              }`}
+            >
+              {isCurrentInCompare ? (
+                <>
+                  <XCircle className="w-4 h-4" />
+                  移出对比
+                </>
+              ) : (
+                <>
+                  <GitCompare className="w-4 h-4" />
+                  加入对比
+                </>
+              )}
+            </button>
+            <button
+              onClick={clearCurrentSelection}
+              className="inline-flex items-center gap-1.5 h-8 px-3 bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white text-sm font-medium rounded-md transition-colors"
+            >
+              <X className="w-4 h-4" />
+              清除选择
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="bg-[#1e293b] border border-gray-700 rounded-lg p-4">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 items-end">
@@ -514,6 +628,9 @@ export default function HeatingFurnace() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-gray-400 text-left border-b border-gray-700">
+                <th className="pb-3 w-10 font-medium">
+                  <span className="sr-only">对比</span>
+                </th>
                 <th className="pb-3 font-medium whitespace-nowrap">板坯号</th>
                 <th className="pb-3 font-medium whitespace-nowrap">炉号</th>
                 <th className="pb-3 font-medium whitespace-nowrap">预热段</th>
@@ -529,14 +646,33 @@ export default function HeatingFurnace() {
             <tbody>
               {sortedDischargeRecords.slice(0, 8).map((record: HeatingRecord, index: number) => {
                 const isOverLimit = record.dischargeTemp > DISCHARGE_TEMP_LIMIT;
+                const isSelected = currentSlabNo === record.slabNo;
+                const isInCompare = compareSlabNos.includes(record.slabNo);
                 return (
                   <tr
                     key={record.id}
                     onClick={() => setCurrentSlabNo(record.slabNo)}
-                    className={`border-b border-gray-800 hover:bg-gray-800/50 cursor-pointer ${
-                      index % 2 === 0 ? 'bg-[#1e293b]/30' : 'bg-transparent'
-                    } ${currentSlabNo === record.slabNo ? 'bg-[#e86a2c]/10' : ''}`}
+                    className={`border-b transition-colors cursor-pointer ${
+                      isSelected
+                        ? 'bg-orange-500/10 border-orange-500/40 hover:bg-orange-500/15'
+                        : 'border-gray-800 hover:bg-gray-800/50'
+                    }`}
                   >
+                    <td className="py-3 pr-4 w-10">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleCompareSlab(record.slabNo);
+                        }}
+                        className="p-1 hover:bg-gray-700/50 rounded transition-colors"
+                      >
+                        {isInCompare ? (
+                          <CheckSquare className="w-5 h-5 text-orange-400" />
+                        ) : (
+                          <Square className="w-5 h-5 text-gray-500" />
+                        )}
+                      </button>
+                    </td>
                     <td className="py-3 pr-4 text-white font-mono whitespace-nowrap">{record.slabNo}</td>
                     <td className="py-3 pr-4 text-gray-300 whitespace-nowrap">{record.furnaceNo}</td>
                     <td className="py-3 pr-4 text-gray-300 whitespace-nowrap">{record.preheatTemp}℃</td>
@@ -586,6 +722,9 @@ export default function HeatingFurnace() {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-gray-400 text-left border-b border-gray-700">
+                <th className="pb-3 w-10 font-medium">
+                  <span className="sr-only">对比</span>
+                </th>
                 <th className="pb-3 font-medium whitespace-nowrap">板坯号</th>
                 <th className="pb-3 font-medium whitespace-nowrap">钢种</th>
                 <th className="pb-3 font-medium whitespace-nowrap">炉号</th>
@@ -599,23 +738,43 @@ export default function HeatingFurnace() {
             <tbody>
               {inFurnaceSlabs.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-gray-500">
+                  <td colSpan={9} className="py-12 text-center text-gray-500">
                     <Flame className="w-10 h-10 mx-auto mb-2 opacity-30" />
                     <p>当前无在炉板坯</p>
                   </td>
                 </tr>
               ) : (
-                inFurnaceSlabs.map((item, index) => (
-                  <tr
-                    key={item.record.id}
-                    onClick={() => setCurrentSlabNo(item.record.slabNo)}
-                    className={`border-b border-gray-800 hover:bg-gray-800/50 cursor-pointer ${
-                      index % 2 === 0 ? 'bg-[#1e293b]/30' : 'bg-transparent'
-                    } ${currentSlabNo === item.record.slabNo ? 'bg-[#e86a2c]/10' : ''}`}
-                  >
-                    <td className="py-3 pr-4 text-white font-mono whitespace-nowrap">
-                      {item.record.slabNo}
-                    </td>
+                inFurnaceSlabs.map((item) => {
+                  const isSelected = currentSlabNo === item.record.slabNo;
+                  const isInCompare = compareSlabNos.includes(item.record.slabNo);
+                  return (
+                    <tr
+                      key={item.record.id}
+                      onClick={() => setCurrentSlabNo(item.record.slabNo)}
+                      className={`border-b transition-colors cursor-pointer ${
+                        isSelected
+                          ? 'bg-orange-500/10 border-orange-500/40 hover:bg-orange-500/15'
+                          : 'border-gray-800 hover:bg-gray-800/50'
+                      }`}
+                    >
+                      <td className="py-3 pr-4 w-10">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleCompareSlab(item.record.slabNo);
+                          }}
+                          className="p-1 hover:bg-gray-700/50 rounded transition-colors"
+                        >
+                          {isInCompare ? (
+                            <CheckSquare className="w-5 h-5 text-orange-400" />
+                          ) : (
+                            <Square className="w-5 h-5 text-gray-500" />
+                          )}
+                        </button>
+                      </td>
+                      <td className="py-3 pr-4 text-white font-mono whitespace-nowrap">
+                        {item.record.slabNo}
+                      </td>
                     <td className="py-3 pr-4 text-gray-300 whitespace-nowrap">
                       {item.slab?.steelGrade}
                     </td>
@@ -658,7 +817,8 @@ export default function HeatingFurnace() {
                       </div>
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>

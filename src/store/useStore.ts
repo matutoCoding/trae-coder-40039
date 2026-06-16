@@ -102,12 +102,20 @@ interface StoreState {
   coilingRecords: CoilingRecord[];
   inspectionRecords: InspectionRecord[];
 
+  compareSlabNos: string[];
+
   filterSteelGrade: string;
   filterSlabNo: string;
   filterStartDate: string;
   filterEndDate: string;
 
   setCurrentSlabNo: (slabNo: string | null) => void;
+  clearCurrentSelection: () => void;
+
+  toggleCompareSlab: (slabNo: string) => boolean;
+  addCompareSlab: (slabNo: string) => boolean;
+  removeCompareSlab: (slabNo: string) => void;
+  clearCompareSlabs: () => void;
 
   setFilterSteelGrade: (grade: string) => void;
   setFilterSlabNo: (slabNo: string) => void;
@@ -121,8 +129,12 @@ interface StoreState {
 
   getFilteredSlabs: () => Slab[];
   getFilteredHeatingRecords: () => HeatingRecord[];
+  getFilteredDescalingRecords: () => DescalingRecord[];
+  getFilteredRoughingPasses: () => RoughingPass[];
   getFilteredFinishingRecords: () => FinishingRecord[];
+  getFilteredCoolingRecords: () => CoolingRecord[];
   getFilteredCoilingRecords: () => CoilingRecord[];
+  getFilteredInspectionRecords: () => InspectionRecord[];
 
   addEntity: <T extends Entity>(type: EntityType, entity: T) => void;
   updateEntity: <T extends Entity>(type: EntityType, id: string, updates: Partial<T>) => void;
@@ -143,6 +155,8 @@ export const useStore = create<StoreState>((set, get) => ({
   coilingRecords: mockCoilingRecords,
   inspectionRecords: mockInspectionRecords,
 
+  compareSlabNos: [],
+
   filterSteelGrade: '',
   filterSlabNo: '',
   filterStartDate: '',
@@ -151,6 +165,48 @@ export const useStore = create<StoreState>((set, get) => ({
   setCurrentSlabNo: (slabNo) => {
     set({ currentSlabNo: slabNo });
     savePersistedState({ slabs: get().slabs, currentSlabNo: slabNo });
+  },
+
+  clearCurrentSelection: () => {
+    set({ currentSlabNo: null });
+    get().resetFilters();
+    savePersistedState({ slabs: get().slabs, currentSlabNo: null });
+  },
+
+  toggleCompareSlab: (slabNo) => {
+    const { compareSlabNos } = get();
+    const index = compareSlabNos.indexOf(slabNo);
+    if (index !== -1) {
+      set({ compareSlabNos: compareSlabNos.filter((n) => n !== slabNo) });
+      return true;
+    }
+    if (compareSlabNos.length >= 4) {
+      set({ compareSlabNos: [...compareSlabNos.slice(1), slabNo] });
+      return true;
+    }
+    set({ compareSlabNos: [...compareSlabNos, slabNo] });
+    return true;
+  },
+
+  addCompareSlab: (slabNo) => {
+    const { compareSlabNos } = get();
+    if (compareSlabNos.includes(slabNo)) {
+      return false;
+    }
+    if (compareSlabNos.length >= 4) {
+      return false;
+    }
+    set({ compareSlabNos: [...compareSlabNos, slabNo] });
+    return true;
+  },
+
+  removeCompareSlab: (slabNo) => {
+    const { compareSlabNos } = get();
+    set({ compareSlabNos: compareSlabNos.filter((n) => n !== slabNo) });
+  },
+
+  clearCompareSlabs: () => {
+    set({ compareSlabNos: [] });
   },
 
   setFilterSteelGrade: (grade) => {
@@ -247,6 +303,86 @@ export const useStore = create<StoreState>((set, get) => ({
     });
   },
 
+  getFilteredDescalingRecords: (): DescalingRecord[] => {
+    const { descalingRecords, slabs, heatingRecords, filterSteelGrade, filterSlabNo, filterStartDate, filterEndDate } = get();
+
+    let matchedSlabNos: string[] | null = null;
+    if (filterSteelGrade) {
+      matchedSlabNos = slabs
+        .filter((s) => s.steelGrade === filterSteelGrade)
+        .map((s) => s.slabNo);
+    }
+
+    const heatingTimeMap = new Map<string, string>();
+    if (filterStartDate || filterEndDate) {
+      heatingRecords.forEach((hr) => {
+        const time = hr.outTime || hr.inTime;
+        if (time) {
+          heatingTimeMap.set(hr.slabNo, time);
+        }
+      });
+    }
+
+    return descalingRecords.filter((record) => {
+      if (matchedSlabNos && !matchedSlabNos.includes(record.slabNo)) {
+        return false;
+      }
+
+      if (filterSlabNo && !record.slabNo.toLowerCase().includes(filterSlabNo.toLowerCase())) {
+        return false;
+      }
+
+      if (filterStartDate || filterEndDate) {
+        const heatingTime = heatingTimeMap.get(record.slabNo);
+        if (!heatingTime || !isDateInRange(heatingTime, filterStartDate, filterEndDate)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  },
+
+  getFilteredRoughingPasses: (): RoughingPass[] => {
+    const { roughingPasses, slabs, heatingRecords, filterSteelGrade, filterSlabNo, filterStartDate, filterEndDate } = get();
+
+    let matchedSlabNos: string[] | null = null;
+    if (filterSteelGrade) {
+      matchedSlabNos = slabs
+        .filter((s) => s.steelGrade === filterSteelGrade)
+        .map((s) => s.slabNo);
+    }
+
+    const heatingTimeMap = new Map<string, string>();
+    if (filterStartDate || filterEndDate) {
+      heatingRecords.forEach((hr) => {
+        const time = hr.outTime || hr.inTime;
+        if (time) {
+          heatingTimeMap.set(hr.slabNo, time);
+        }
+      });
+    }
+
+    return roughingPasses.filter((record) => {
+      if (matchedSlabNos && !matchedSlabNos.includes(record.slabNo)) {
+        return false;
+      }
+
+      if (filterSlabNo && !record.slabNo.toLowerCase().includes(filterSlabNo.toLowerCase())) {
+        return false;
+      }
+
+      if (filterStartDate || filterEndDate) {
+        const heatingTime = heatingTimeMap.get(record.slabNo);
+        if (!heatingTime || !isDateInRange(heatingTime, filterStartDate, filterEndDate)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  },
+
   getFilteredFinishingRecords: (): FinishingRecord[] => {
     const { finishingRecords, slabs, heatingRecords, filterSteelGrade, filterSlabNo, filterStartDate, filterEndDate } = get();
 
@@ -308,6 +444,86 @@ export const useStore = create<StoreState>((set, get) => ({
     }
 
     return coilingRecords.filter((record) => {
+      if (matchedSlabNos && !matchedSlabNos.includes(record.slabNo)) {
+        return false;
+      }
+
+      if (filterSlabNo && !record.slabNo.toLowerCase().includes(filterSlabNo.toLowerCase())) {
+        return false;
+      }
+
+      if (filterStartDate || filterEndDate) {
+        const heatingTime = heatingTimeMap.get(record.slabNo);
+        if (!heatingTime || !isDateInRange(heatingTime, filterStartDate, filterEndDate)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  },
+
+  getFilteredCoolingRecords: (): CoolingRecord[] => {
+    const { coolingRecords, slabs, heatingRecords, filterSteelGrade, filterSlabNo, filterStartDate, filterEndDate } = get();
+
+    let matchedSlabNos: string[] | null = null;
+    if (filterSteelGrade) {
+      matchedSlabNos = slabs
+        .filter((s) => s.steelGrade === filterSteelGrade)
+        .map((s) => s.slabNo);
+    }
+
+    const heatingTimeMap = new Map<string, string>();
+    if (filterStartDate || filterEndDate) {
+      heatingRecords.forEach((hr) => {
+        const time = hr.outTime || hr.inTime;
+        if (time) {
+          heatingTimeMap.set(hr.slabNo, time);
+        }
+      });
+    }
+
+    return coolingRecords.filter((record) => {
+      if (matchedSlabNos && !matchedSlabNos.includes(record.slabNo)) {
+        return false;
+      }
+
+      if (filterSlabNo && !record.slabNo.toLowerCase().includes(filterSlabNo.toLowerCase())) {
+        return false;
+      }
+
+      if (filterStartDate || filterEndDate) {
+        const heatingTime = heatingTimeMap.get(record.slabNo);
+        if (!heatingTime || !isDateInRange(heatingTime, filterStartDate, filterEndDate)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  },
+
+  getFilteredInspectionRecords: (): InspectionRecord[] => {
+    const { inspectionRecords, slabs, heatingRecords, filterSteelGrade, filterSlabNo, filterStartDate, filterEndDate } = get();
+
+    let matchedSlabNos: string[] | null = null;
+    if (filterSteelGrade) {
+      matchedSlabNos = slabs
+        .filter((s) => s.steelGrade === filterSteelGrade)
+        .map((s) => s.slabNo);
+    }
+
+    const heatingTimeMap = new Map<string, string>();
+    if (filterStartDate || filterEndDate) {
+      heatingRecords.forEach((hr) => {
+        const time = hr.outTime || hr.inTime;
+        if (time) {
+          heatingTimeMap.set(hr.slabNo, time);
+        }
+      });
+    }
+
+    return inspectionRecords.filter((record) => {
       if (matchedSlabNos && !matchedSlabNos.includes(record.slabNo)) {
         return false;
       }

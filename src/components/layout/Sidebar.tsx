@@ -8,6 +8,7 @@ import {
   Droplets,
   Package,
   ClipboardCheck,
+  GitCompare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -51,6 +52,11 @@ const menuItems = [
     title: "性能检验",
     path: "/inspection",
     icon: ClipboardCheck,
+  },
+  {
+    title: "板坯对比",
+    path: "/slab-compare",
+    icon: GitCompare,
   },
 ];
 

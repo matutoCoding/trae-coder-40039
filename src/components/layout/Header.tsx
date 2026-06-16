@@ -19,6 +19,7 @@ const pathNameMap: Record<string, string> = {
   "/laminar-cooling": "层流冷却",
   "/coiling": "卷取打捆",
   "/inspection": "性能检验",
+  "/slab-compare": "板坯对比",
 };
 
 export default function Header() {

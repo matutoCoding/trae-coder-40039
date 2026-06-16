@@ -9,6 +9,8 @@ import {
   Factory,
   ClipboardCheck,
   Check,
+  X,
+  Clock,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/store/useStore';
@@ -21,6 +23,7 @@ import type {
   CoolingRecord,
   CoilingRecord,
   InspectionRecord,
+  InspectionResult,
 } from '@/types';
 import {
   formatDateTime,
@@ -30,17 +33,30 @@ import {
   formatFlow,
   formatStrength,
   formatElongation,
+  formatImpactEnergy,
+  formatDuration,
 } from '@/utils/format';
 
 type NodeStatus = 'completed' | 'in-progress' | 'pending';
+
+type ParamColor = 'default' | 'temperature' | 'thickness' | 'strength';
+
+interface TimelineNodeParam {
+  label: string;
+  value: string;
+  color?: ParamColor;
+}
 
 interface TimelineNodeData {
   id: string;
   title: string;
   icon: typeof Package;
-  time?: string;
-  params: { label: string; value: string }[];
+  startTime?: string;
+  endTime?: string;
+  duration?: string;
+  params: TimelineNodeParam[];
   status: NodeStatus;
+  inspectionBadge?: InspectionResult;
 }
 
 interface ProductionTimelineProps {
@@ -60,20 +76,24 @@ const statusOrder: SlabStatus[] = [
 ];
 
 const getNodeStatus = (nodeIndex: number, slabStatus: SlabStatus): NodeStatus => {
+  if (slabStatus === 'finished') {
+    return 'completed';
+  }
+
   const statusIndex = statusOrder.indexOf(slabStatus);
-  
+
   if (statusIndex === -1 || statusIndex === 0) {
     return 'pending';
   }
-  
+
   if (nodeIndex < statusIndex - 1) {
     return 'completed';
   }
-  
+
   if (nodeIndex === statusIndex - 1) {
     return 'in-progress';
   }
-  
+
   return 'pending';
 };
 
@@ -101,6 +121,64 @@ const statusColorMap: Record<NodeStatus, { bg: string; icon: string; ring: strin
   },
 };
 
+const paramLabelColorMap: Record<ParamColor, string> = {
+  default: '',
+  temperature: 'text-orange-400',
+  thickness: 'text-blue-400',
+  strength: 'text-emerald-400',
+};
+
+const calcMinutesBetween = (startStr?: string, endStr?: string): number | null => {
+  if (!startStr || !endStr) return null;
+  const start = new Date(startStr).getTime();
+  const end = new Date(endStr).getTime();
+  if (isNaN(start) || isNaN(end)) return null;
+  return Math.max(0, Math.round((end - start) / 60000));
+};
+
+const formatTimeRange = (startTime?: string, endTime?: string, duration?: string): string => {
+  if (startTime && endTime && duration) {
+    return `${formatDateTime(startTime)} → ${formatDateTime(endTime)}（耗时 ${duration}）`;
+  }
+  if (startTime && endTime) {
+    const mins = calcMinutesBetween(startTime, endTime);
+    if (mins !== null) {
+      return `${formatDateTime(startTime)} → ${formatDateTime(endTime)}（耗时 ${formatDuration(mins)}）`;
+    }
+    return `${formatDateTime(startTime)} → ${formatDateTime(endTime)}`;
+  }
+  if (startTime) {
+    return `开始：${formatDateTime(startTime)}`;
+  }
+  return '--';
+};
+
+const buildInspectionBadge = (
+  result: InspectionResult
+): { text: string; className: string; icon: typeof Check } => {
+  switch (result) {
+    case 'qualified':
+      return {
+        text: '合格',
+        className: 'bg-safe-500/20 text-safe-400 border-safe-500/50',
+        icon: Check,
+      };
+    case 'unqualified':
+      return {
+        text: '不合格',
+        className: 'bg-red-500/20 text-red-400 border-red-500/50',
+        icon: X,
+      };
+    case 'pending':
+    default:
+      return {
+        text: '待检',
+        className: 'bg-gray-500/20 text-gray-400 border-gray-500/50',
+        icon: Clock,
+      };
+  }
+};
+
 function TimelineNode({
   node,
   isLast,
@@ -110,6 +188,12 @@ function TimelineNode({
 }) {
   const colors = statusColorMap[node.status];
   const Icon = node.icon;
+  const timeRange = formatTimeRange(node.startTime, node.endTime, node.duration);
+
+  const inspectionBadge = node.inspectionBadge
+    ? buildInspectionBadge(node.inspectionBadge)
+    : null;
+  const BadgeIcon = inspectionBadge?.icon;
 
   return (
     <div className="relative flex gap-4 pb-8 last:pb-0">
@@ -150,7 +234,7 @@ function TimelineNode({
       </div>
 
       <div className="flex-1 pb-1">
-        <div className="flex items-center gap-3 mb-1.5">
+        <div className="flex items-center gap-3 mb-1.5 flex-wrap">
           <h4
             className={cn(
               'text-base font-semibold',
@@ -159,6 +243,17 @@ function TimelineNode({
           >
             {node.title}
           </h4>
+          {inspectionBadge && BadgeIcon && (
+            <span
+              className={cn(
+                'inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg border text-base font-bold',
+                inspectionBadge.className
+              )}
+            >
+              <BadgeIcon className="w-5 h-5" />
+              {inspectionBadge.text}
+            </span>
+          )}
           <span
             className={cn(
               'text-xs px-2 py-0.5 rounded-md font-medium',
@@ -179,7 +274,7 @@ function TimelineNode({
             node.status === 'pending' ? 'text-gray-600' : 'text-gray-400'
           )}
         >
-          {node.time || '--'}
+          {timeRange}
         </p>
 
         {node.params.length > 0 && (
@@ -197,7 +292,11 @@ function TimelineNode({
                 <span
                   className={cn(
                     'text-xs mr-2',
-                    node.status === 'pending' ? 'text-gray-600' : 'text-gray-500'
+                    node.status === 'pending'
+                      ? 'text-gray-600'
+                      : param.color && param.color !== 'default'
+                        ? paramLabelColorMap[param.color]
+                        : 'text-gray-500'
                   )}
                 >
                   {param.label}
@@ -268,18 +367,80 @@ export default function ProductionTimeline({
     [getEntitiesBySlabNo, slabNo]
   );
 
+  const totalDuration = useMemo(() => {
+    const start = slab?.chargingTime;
+    const end = inspectionRecords[0]?.inspectTime;
+    const mins = calcMinutesBetween(start, end);
+    return mins !== null ? formatDuration(mins) : null;
+  }, [slab, inspectionRecords]);
+
   const nodes: TimelineNodeData[] = useMemo(() => {
     const slabStatus = slab?.status ?? 'pending';
 
     const heatingRecord = heatingRecords[0];
     const descalingRecord = descalingRecords[0];
-    const lastRoughingPass = [...roughingPasses].sort(
-      (a, b) => b.passNo - a.passNo
-    )[0];
+    const sortedRoughing = [...roughingPasses].sort((a, b) => b.passNo - a.passNo);
+    const firstRoughingPass = sortedRoughing[sortedRoughing.length - 1];
+    const lastRoughingPass = sortedRoughing[0];
     const finishingRecord = finishingRecords[0];
     const coolingRecord = coolingRecords[0];
     const coilingRecord = coilingRecords[0];
     const inspectionRecord = inspectionRecords[0];
+
+    const addMinutes = (baseStr: string | undefined, mins: number): string | undefined => {
+      if (!baseStr) return undefined;
+      const d = new Date(baseStr);
+      if (isNaN(d.getTime())) return undefined;
+      d.setMinutes(d.getMinutes() + mins);
+      return d.toISOString().replace('T', ' ').substring(0, 19);
+    };
+
+    const roughingStart = heatingRecord?.outTime;
+    const roughingEnd = firstRoughingPass
+      ? addMinutes(heatingRecord?.outTime, 2)
+      : undefined;
+    const roughingDuration = roughingStart && roughingEnd
+      ? formatDuration(calcMinutesBetween(roughingStart, roughingEnd) ?? 0)
+      : undefined;
+
+    const finishingStart = roughingEnd;
+    const finishingEnd = finishingRecord && roughingEnd
+      ? addMinutes(roughingEnd, 3)
+      : undefined;
+    const finishingDuration = finishingStart && finishingEnd
+      ? formatDuration(calcMinutesBetween(finishingStart, finishingEnd) ?? 0)
+      : undefined;
+
+    const coolingStart = finishingEnd;
+    const coolingEnd = coolingRecord && finishingEnd
+      ? addMinutes(finishingEnd, 1)
+      : undefined;
+    const coolingDuration = coolingStart && coolingEnd
+      ? formatDuration(calcMinutesBetween(coolingStart, coolingEnd) ?? 0)
+      : undefined;
+
+    const coilingStart = coolingEnd;
+    const coilingEnd = coilingRecord && coolingEnd
+      ? addMinutes(coolingEnd, 1)
+      : undefined;
+    const coilingDuration = coilingStart && coilingEnd
+      ? formatDuration(calcMinutesBetween(coilingStart, coilingEnd) ?? 0)
+      : undefined;
+
+    const buildCrownQualified = (crown: number): string => {
+      const isQualified = Math.abs(crown) <= 50;
+      return `${crown}μm ${isQualified ? '✓合格' : '✗不合格'}`;
+    };
+
+    const buildThicknessDeviation = (head: number, mid: number, tail: number, target?: number): TimelineNodeParam[] => {
+      const base = target ?? mid;
+      const makeDev = (name: string, val: number): TimelineNodeParam => ({
+        label: `${name}偏差`,
+        value: `${(val - base).toFixed(3)}mm`,
+        color: 'thickness',
+      });
+      return [makeDev('头部', head), makeDev('中部', mid), makeDev('尾部', tail)];
+    };
 
     return [
       {
@@ -287,11 +448,12 @@ export default function ProductionTimeline({
         title: '板坯入炉',
         icon: Package,
         status: getNodeStatus(0, slabStatus),
-        time: slab?.chargingTime ? formatDateTime(slab.chargingTime) : undefined,
+        startTime: slab?.chargingTime,
+        endTime: slab?.chargingTime,
         params: slab
           ? [
               { label: '钢种', value: slab.steelGrade },
-              { label: '厚度', value: formatThickness(slab.thickness, 0) },
+              { label: '厚度', value: formatThickness(slab.thickness, 0), color: 'thickness' },
             ]
           : [],
       },
@@ -300,11 +462,15 @@ export default function ProductionTimeline({
         title: '加热炉',
         icon: Flame,
         status: getNodeStatus(1, slabStatus),
-        time: heatingRecord?.inTime ? formatDateTime(heatingRecord.inTime) : undefined,
+        startTime: heatingRecord?.inTime,
+        endTime: heatingRecord?.outTime,
+        duration: heatingRecord ? `${heatingRecord.heatingDuration}分钟` : undefined,
         params: heatingRecord
           ? [
-              { label: '出炉温度', value: formatTemperature(heatingRecord.dischargeTemp) },
-              { label: '加热时长', value: `${heatingRecord.heatingDuration}分钟` },
+              { label: '预热段', value: formatTemperature(heatingRecord.preheatTemp), color: 'temperature' },
+              { label: '加热段', value: formatTemperature(heatingRecord.heatingTemp), color: 'temperature' },
+              { label: '均热段', value: formatTemperature(heatingRecord.soakingTemp), color: 'temperature' },
+              { label: '出炉温度', value: formatTemperature(heatingRecord.dischargeTemp), color: 'temperature' },
             ]
           : [],
       },
@@ -313,11 +479,13 @@ export default function ProductionTimeline({
         title: '高压除鳞',
         icon: Droplets,
         status: getNodeStatus(2, slabStatus),
-        time: descalingRecord?.recordTime ? formatDateTime(descalingRecord.recordTime) : undefined,
+        startTime: descalingRecord?.recordTime,
+        endTime: descalingRecord?.recordTime,
         params: descalingRecord
           ? [
               { label: '水压', value: formatPressure(descalingRecord.waterPressure) },
               { label: '流量', value: formatFlow(descalingRecord.waterFlow) },
+              { label: '除鳞次数', value: `${descalingRecord.descalingCount}次` },
             ]
           : [],
       },
@@ -326,10 +494,12 @@ export default function ProductionTimeline({
         title: '粗轧机组',
         icon: Wind,
         status: getNodeStatus(3, slabStatus),
-        time: undefined,
+        startTime: roughingStart,
+        endTime: roughingEnd,
+        duration: roughingDuration,
         params: lastRoughingPass
           ? [
-              { label: '出口厚度', value: formatThickness(lastRoughingPass.outletThickness, 1) },
+              { label: '出口厚度', value: formatThickness(lastRoughingPass.outletThickness, 1), color: 'thickness' },
               { label: '道次数', value: `${lastRoughingPass.passNo}道次` },
             ]
           : [],
@@ -339,11 +509,18 @@ export default function ProductionTimeline({
         title: '精轧机组',
         icon: Cog,
         status: getNodeStatus(4, slabStatus),
-        time: undefined,
+        startTime: finishingStart,
+        endTime: finishingEnd,
+        duration: finishingDuration,
         params: finishingRecord
           ? [
-              { label: '终轧温度', value: formatTemperature(finishingRecord.finishingTemp) },
-              { label: '厚度', value: formatThickness(finishingRecord.midThickness) },
+              { label: '终轧温度', value: formatTemperature(finishingRecord.finishingTemp), color: 'temperature' },
+              ...buildThicknessDeviation(
+                finishingRecord.headThickness,
+                finishingRecord.midThickness,
+                finishingRecord.tailThickness
+              ),
+              { label: '凸度', value: buildCrownQualified(finishingRecord.crown), color: 'thickness' },
             ]
           : [],
       },
@@ -352,10 +529,13 @@ export default function ProductionTimeline({
         title: '层流冷却',
         icon: Waves,
         status: getNodeStatus(5, slabStatus),
-        time: undefined,
+        startTime: coolingStart,
+        endTime: coolingEnd,
+        duration: coolingDuration,
         params: coolingRecord
           ? [
-              { label: '冷却后温度', value: formatTemperature(coolingRecord.postCoolingTemp) },
+              { label: '冷却前温度', value: formatTemperature(coolingRecord.preCoolingTemp), color: 'temperature' },
+              { label: '冷却后温度', value: formatTemperature(coolingRecord.postCoolingTemp), color: 'temperature' },
               { label: '冷却速率', value: `${coolingRecord.coolingRate}℃/s` },
             ]
           : [],
@@ -365,10 +545,12 @@ export default function ProductionTimeline({
         title: '卷取打捆',
         icon: Factory,
         status: getNodeStatus(6, slabStatus),
-        time: undefined,
+        startTime: coilingStart,
+        endTime: coilingEnd,
+        duration: coilingDuration,
         params: coilingRecord
           ? [
-              { label: '卷取温度', value: formatTemperature(coilingRecord.coilingTemp) },
+              { label: '卷取温度', value: formatTemperature(coilingRecord.coilingTemp), color: 'temperature' },
               { label: '卷号', value: coilingRecord.coilNo },
             ]
           : [],
@@ -378,11 +560,15 @@ export default function ProductionTimeline({
         title: '性能检验',
         icon: ClipboardCheck,
         status: getNodeStatus(7, slabStatus),
-        time: inspectionRecord?.inspectTime ? formatDateTime(inspectionRecord.inspectTime) : undefined,
+        startTime: inspectionRecord?.inspectTime,
+        endTime: inspectionRecord?.inspectTime,
+        inspectionBadge: inspectionRecord?.result,
         params: inspectionRecord
           ? [
-              { label: '屈服强度', value: formatStrength(inspectionRecord.yieldStrength) },
+              { label: '屈服强度', value: formatStrength(inspectionRecord.yieldStrength), color: 'strength' },
+              { label: '抗拉强度', value: formatStrength(inspectionRecord.tensileStrength), color: 'strength' },
               { label: '伸长率', value: formatElongation(inspectionRecord.elongation) },
+              { label: '冲击功', value: formatImpactEnergy(inspectionRecord.impactEnergy), color: 'strength' },
             ]
           : [],
       },
@@ -418,14 +604,20 @@ export default function ProductionTimeline({
         className
       )}
     >
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
           <h3 className="text-lg font-semibold text-white">生产履历</h3>
           <p className="text-sm text-gray-500 mt-0.5">
             板坯编号：<span className="font-numeric text-gray-400">{slab.slabNo}</span>
           </p>
         </div>
-        <div className="text-right">
+        <div className="flex items-center gap-3 flex-wrap">
+          {totalDuration && (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-medium bg-indigo-500/15 text-indigo-400 border border-indigo-500/30">
+              <Clock className="w-4 h-4" />
+              总耗时 {totalDuration}
+            </span>
+          )}
           <span
             className={cn(
               'inline-block px-3 py-1 rounded-md text-sm font-medium',
