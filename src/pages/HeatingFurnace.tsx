@@ -1,5 +1,6 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useStore } from '@/store/useStore';
+import { Search, RotateCcw } from 'lucide-react';
 import SectionCard from '@/components/common/SectionCard';
 import StatusBadge from '@/components/common/StatusBadge';
 import DataCard from '@/components/common/DataCard';
@@ -60,8 +61,64 @@ interface FurnaceInfo {
 export default function HeatingFurnace() {
   const { heatingRecords, slabs, setCurrentSlabNo, currentSlabNo } = useStore();
 
+  const [filterSlabNo, setFilterSlabNo] = useState('');
+  const [filterSteelGrade, setFilterSteelGrade] = useState('');
+  const [filterStartDate, setFilterStartDate] = useState('');
+  const [filterEndDate, setFilterEndDate] = useState('');
+  const [filterFurnaceNo, setFilterFurnaceNo] = useState('');
+
+  const steelGrades = useMemo(() => {
+    const grades = new Set(slabs.map((s) => s.steelGrade));
+    return Array.from(grades).sort();
+  }, [slabs]);
+
+  const furnaceOptions = ['加热炉1号', '加热炉2号', '加热炉3号'];
+
+  const filteredHeatingRecords = useMemo(() => {
+    return heatingRecords.filter((record) => {
+      if (filterSlabNo && !record.slabNo.toLowerCase().includes(filterSlabNo.toLowerCase())) {
+        return false;
+      }
+
+      if (filterFurnaceNo && record.furnaceNo !== filterFurnaceNo) {
+        return false;
+      }
+
+      if (filterStartDate) {
+        const recordDate = new Date(record.inTime).toISOString().split('T')[0];
+        if (recordDate < filterStartDate) {
+          return false;
+        }
+      }
+
+      if (filterEndDate) {
+        const recordDate = new Date(record.inTime).toISOString().split('T')[0];
+        if (recordDate > filterEndDate) {
+          return false;
+        }
+      }
+
+      if (filterSteelGrade) {
+        const slab = slabs.find((s) => s.slabNo === record.slabNo);
+        if (!slab || slab.steelGrade !== filterSteelGrade) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [heatingRecords, slabs, filterSlabNo, filterSteelGrade, filterStartDate, filterEndDate, filterFurnaceNo]);
+
+  const handleResetFilters = () => {
+    setFilterSlabNo('');
+    setFilterSteelGrade('');
+    setFilterStartDate('');
+    setFilterEndDate('');
+    setFilterFurnaceNo('');
+  };
+
   const furnaceInfoList: FurnaceInfo[] = useMemo(() => {
-    const inFurnaceRecords = heatingRecords.filter((r) => !r.outTime);
+    const inFurnaceRecords = filteredHeatingRecords.filter((r) => !r.outTime);
 
     const furnaces: FurnaceInfo[] = [
       {
@@ -98,10 +155,10 @@ export default function HeatingFurnace() {
     });
 
     return furnaces;
-  }, [heatingRecords]);
+  }, [filteredHeatingRecords]);
 
   const inFurnaceSlabs = useMemo(() => {
-    const inFurnaceRecords = heatingRecords.filter((r) => !r.outTime);
+    const inFurnaceRecords = filteredHeatingRecords.filter((r) => !r.outTime);
     return inFurnaceRecords
       .map((record) => {
         const slab = slabs.find((s) => s.slabNo === record.slabNo);
@@ -120,13 +177,13 @@ export default function HeatingFurnace() {
         };
       })
       .filter((item) => item.slab);
-  }, [heatingRecords, slabs]);
+  }, [filteredHeatingRecords, slabs]);
 
   const sortedDischargeRecords = useMemo(() => {
-    return [...heatingRecords]
+    return [...filteredHeatingRecords]
       .filter((r) => r.outTime)
       .sort((a, b) => new Date(b.outTime!).getTime() - new Date(a.outTime!).getTime());
-  }, [heatingRecords]);
+  }, [filteredHeatingRecords]);
 
   return (
     <div className="space-y-6">
@@ -135,6 +192,86 @@ export default function HeatingFurnace() {
         <div>
           <h1 className="text-2xl font-bold text-white">加热炉管理</h1>
           <p className="text-gray-400 text-sm">加热炉运行监控与板坯加热过程管理</p>
+        </div>
+      </div>
+
+      <div className="bg-[#1e293b] border border-gray-700 rounded-lg p-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 items-end">
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">板坯号搜索</label>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <input
+                type="text"
+                value={filterSlabNo}
+                onChange={(e) => setFilterSlabNo(e.target.value)}
+                placeholder="输入板坯号..."
+                className="w-full pl-8 pr-3 py-2 bg-[#0f172a] border border-gray-700 rounded-md text-sm text-white placeholder-gray-500 focus:outline-none focus:border-[#e86a2c] focus:ring-1 focus:ring-[#e86a2c]/50 transition-colors"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">钢种筛选</label>
+            <select
+              value={filterSteelGrade}
+              onChange={(e) => setFilterSteelGrade(e.target.value)}
+              className="w-full px-3 py-2 bg-[#0f172a] border border-gray-700 rounded-md text-sm text-white focus:outline-none focus:border-[#e86a2c] focus:ring-1 focus:ring-[#e86a2c]/50 transition-colors appearance-none cursor-pointer"
+            >
+              <option value="">全部钢种</option>
+              {steelGrades.map((grade) => (
+                <option key={grade} value={grade}>
+                  {grade}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">开始日期</label>
+            <input
+              type="date"
+              value={filterStartDate}
+              onChange={(e) => setFilterStartDate(e.target.value)}
+              className="w-full px-3 py-2 bg-[#0f172a] border border-gray-700 rounded-md text-sm text-white focus:outline-none focus:border-[#e86a2c] focus:ring-1 focus:ring-[#e86a2c]/50 transition-colors"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">结束日期</label>
+            <input
+              type="date"
+              value={filterEndDate}
+              onChange={(e) => setFilterEndDate(e.target.value)}
+              className="w-full px-3 py-2 bg-[#0f172a] border border-gray-700 rounded-md text-sm text-white focus:outline-none focus:border-[#e86a2c] focus:ring-1 focus:ring-[#e86a2c]/50 transition-colors"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5">炉号筛选</label>
+            <select
+              value={filterFurnaceNo}
+              onChange={(e) => setFilterFurnaceNo(e.target.value)}
+              className="w-full px-3 py-2 bg-[#0f172a] border border-gray-700 rounded-md text-sm text-white focus:outline-none focus:border-[#e86a2c] focus:ring-1 focus:ring-[#e86a2c]/50 transition-colors appearance-none cursor-pointer"
+            >
+              <option value="">全部炉号</option>
+              {furnaceOptions.map((furnace) => (
+                <option key={furnace} value={furnace}>
+                  {furnace}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <button
+              onClick={handleResetFilters}
+              className="w-full inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-gray-700 text-gray-300 rounded-md text-sm font-medium hover:bg-gray-600 hover:text-white transition-colors"
+            >
+              <RotateCcw className="w-4 h-4" />
+              重置筛选
+            </button>
+          </div>
         </div>
       </div>
 
@@ -339,10 +476,10 @@ export default function HeatingFurnace() {
             <DataCard
               title="平均加热时长"
               value={
-                heatingRecords.length > 0
+                filteredHeatingRecords.length > 0
                   ? Math.round(
-                      heatingRecords.reduce((sum, r) => sum + r.heatingDuration, 0) /
-                        heatingRecords.length
+                      filteredHeatingRecords.reduce((sum, r) => sum + r.heatingDuration, 0) /
+                        filteredHeatingRecords.length
                     )
                   : 0
               }

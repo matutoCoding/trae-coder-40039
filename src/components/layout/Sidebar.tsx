@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 const menuItems = [
   {
     title: "看板总览",
-    path: "/",
+    path: "/dashboard",
     icon: LayoutDashboard,
   },
   {

@@ -1,3 +1,4 @@
+import { useState, useMemo } from 'react';
 import { useStore } from '@/store/useStore';
 import SectionCard from '@/components/common/SectionCard';
 import DataCard from '@/components/common/DataCard';
@@ -10,6 +11,10 @@ import {
   TrendingUp,
   Activity,
   Target,
+  Search,
+  Filter,
+  RotateCcw,
+  Calendar,
 } from 'lucide-react';
 import type { FinishingRecord } from '@/types';
 import {
@@ -34,11 +39,61 @@ import {
 } from 'recharts';
 
 export default function FinishingMill() {
-  const { finishingRecords, currentSlabNo, getEntitiesBySlabNo, coilingRecords } = useStore();
+  const { finishingRecords, currentSlabNo, getEntitiesBySlabNo, coilingRecords, slabs } = useStore();
 
-  const records: FinishingRecord[] = currentSlabNo
-    ? (getEntitiesBySlabNo('finishingRecords', currentSlabNo) as FinishingRecord[])
-    : finishingRecords;
+  const [searchSlabNo, setSearchSlabNo] = useState('');
+  const [steelGradeFilter, setSteelGradeFilter] = useState('all');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
+  const steelGradeOptions = useMemo(() => {
+    const grades = [...new Set(slabs.map((s) => s.steelGrade))].sort();
+    return [{ value: 'all', label: '全部钢种' }, ...grades.map((g) => ({ value: g, label: g }))];
+  }, [slabs]);
+
+  const baseRecords: FinishingRecord[] = useMemo(
+    () =>
+      currentSlabNo
+        ? (getEntitiesBySlabNo('finishingRecords', currentSlabNo) as FinishingRecord[])
+        : finishingRecords,
+    [finishingRecords, currentSlabNo, getEntitiesBySlabNo]
+  );
+
+  const records: FinishingRecord[] = useMemo(() => {
+    let list = baseRecords;
+
+    if (searchSlabNo.trim()) {
+      const keyword = searchSlabNo.trim().toLowerCase();
+      list = list.filter((r) => r.slabNo.toLowerCase().includes(keyword));
+    }
+
+    if (steelGradeFilter !== 'all') {
+      list = list.filter((r) => {
+        const slab = slabs.find((s) => s.slabNo === r.slabNo);
+        return slab?.steelGrade === steelGradeFilter;
+      });
+    }
+
+    if (startDate || endDate) {
+      list = list.filter((r) => {
+        const slab = slabs.find((s) => s.slabNo === r.slabNo);
+        if (!slab?.chargingTime) return true;
+        const recordDate = slab.chargingTime.split(' ')[0];
+        if (startDate && recordDate < startDate) return false;
+        if (endDate && recordDate > endDate) return false;
+        return true;
+      });
+    }
+
+    return list;
+  }, [baseRecords, searchSlabNo, steelGradeFilter, startDate, endDate, slabs]);
+
+  const handleReset = () => {
+    setSearchSlabNo('');
+    setSteelGradeFilter('all');
+    setStartDate('');
+    setEndDate('');
+  };
 
   const avgFinishingTemp = records.length > 0
     ? records.reduce((sum, r) => sum + r.finishingTemp, 0) / records.length
@@ -126,6 +181,63 @@ export default function FinishingMill() {
           钢卷号: <span className="text-data-400 font-mono">{getCoilNo(currentSlabNo)}</span>
         </div>
       )}
+
+      <div className="flex flex-wrap items-center gap-3 p-4 bg-[#1e293b] border border-gray-700 rounded-lg">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+          <input
+            type="text"
+            placeholder="板坯号搜索..."
+            value={searchSlabNo}
+            onChange={(e) => setSearchSlabNo(e.target.value)}
+            className="w-52 h-9 pl-9 pr-3 bg-[#0f172a] border border-gray-700 rounded-md text-sm text-white placeholder-gray-500 focus:outline-none focus:border-[#e86a2c] transition-colors"
+          />
+        </div>
+
+        <div className="relative">
+          <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+          <select
+            value={steelGradeFilter}
+            onChange={(e) => setSteelGradeFilter(e.target.value)}
+            className="w-40 h-9 pl-9 pr-8 bg-[#0f172a] border border-gray-700 rounded-md text-sm text-white focus:outline-none focus:border-[#e86a2c] transition-colors appearance-none cursor-pointer"
+          >
+            {steelGradeOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Calendar className="w-4 h-4 text-gray-500" />
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="h-9 px-3 bg-[#0f172a] border border-gray-700 rounded-md text-sm text-white focus:outline-none focus:border-[#e86a2c] transition-colors"
+          />
+          <span className="text-gray-500">至</span>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="h-9 px-3 bg-[#0f172a] border border-gray-700 rounded-md text-sm text-white focus:outline-none focus:border-[#e86a2c] transition-colors"
+          />
+        </div>
+
+        <button
+          onClick={handleReset}
+          className="inline-flex items-center gap-1.5 h-9 px-4 bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white text-sm font-medium rounded-md transition-colors"
+        >
+          <RotateCcw className="w-4 h-4" />
+          重置
+        </button>
+
+        <div className="ml-auto text-xs text-gray-500">
+          共 <span className="text-orange-400 font-medium">{records.length}</span> 条记录
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         <DataCard

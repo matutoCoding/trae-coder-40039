@@ -11,6 +11,7 @@ import {
 
 const pathNameMap: Record<string, string> = {
   "/": "看板总览",
+  "/dashboard": "看板总览",
   "/slab-charging": "板坯入炉",
   "/heating-furnace": "加热炉",
   "/roughing-mill": "粗轧除鳞",

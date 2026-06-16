@@ -1,12 +1,12 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useStore } from '@/store/useStore';
 import SectionCard from '@/components/common/SectionCard';
 import StatusBadge from '@/components/common/StatusBadge';
+import ProductionTimeline from '@/components/common/ProductionTimeline';
 import {
   ArrowRightToLine,
   Search,
   Filter,
-  Plus,
   ChevronLeft,
   ChevronRight,
   GripVertical,
@@ -22,28 +22,32 @@ import {
   formatDateTime,
   formatSlabStatus,
 } from '@/utils/format';
-import type { Slab, HeatingRecord, RoughingPass } from '@/types';
+import type { Slab, SlabStatus } from '@/types';
 
 export default function SlabCharging() {
   const {
     slabs,
     setCurrentSlabNo,
     currentSlabNo,
-    updateEntity,
-    getEntitiesBySlabNo,
+    chargeSlab,
+    reorderSlabs,
   } = useStore();
 
   const [activeTab, setActiveTab] = useState<'pending' | 'charged'>('pending');
   const [searchKeyword, setSearchKeyword] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [chargedStatusFilter, setChargedStatusFilter] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
-  const [pendingList, setPendingList] = useState<Slab[]>([]);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   const pageSize = 8;
 
   const pendingSlabs = useMemo(() => {
-    let list = slabs.filter((s) => s.status === 'pending' || s.status === 'charging');
+    return slabs.filter((s) => s.status === 'pending');
+  }, [slabs]);
+
+  const filteredPendingSlabs = useMemo(() => {
+    let list = pendingSlabs;
     if (searchKeyword) {
       const keyword = searchKeyword.toLowerCase();
       list = list.filter(
@@ -52,25 +56,12 @@ export default function SlabCharging() {
           s.steelGrade.toLowerCase().includes(keyword)
       );
     }
-    if (statusFilter !== 'all') {
-      list = list.filter((s) => s.status === statusFilter);
-    }
     return list;
-  }, [slabs, searchKeyword, statusFilter]);
-
-  const displayPendingList = pendingList.length > 0 ? pendingList : pendingList;
+  }, [pendingSlabs, searchKeyword]);
 
   const chargedSlabs = useMemo(() => {
-    let list = slabs.filter(
-      (s) =>
-        s.status === 'heating' ||
-        s.status === 'rolling' ||
-        s.status === 'cooling' ||
-        s.status === 'coiling' ||
-        s.status === 'inspecting' ||
-        s.status === 'finished'
-    );
-    if (searchKeyword) {
+    let list = slabs.filter((s) => s.status !== 'pending');
+    if (searchKeyword && activeTab === 'charged') {
       const keyword = searchKeyword.toLowerCase();
       list = list.filter(
         (s) =>
@@ -78,8 +69,11 @@ export default function SlabCharging() {
           s.steelGrade.toLowerCase().includes(keyword)
       );
     }
+    if (chargedStatusFilter !== 'all') {
+      list = list.filter((s) => s.status === chargedStatusFilter);
+    }
     return list;
-  }, [slabs, searchKeyword]);
+  }, [slabs, searchKeyword, chargedStatusFilter, activeTab]);
 
   const totalPages = Math.ceil(chargedSlabs.length / pageSize);
   const pagedChargedSlabs = chargedSlabs.slice(
@@ -91,40 +85,43 @@ export default function SlabCharging() {
     return slabs.find((s) => s.slabNo === currentSlabNo) || null;
   }, [slabs, currentSlabNo]);
 
-  const selectedHeatingRecords = useMemo(() => {
-    if (!currentSlabNo) return [];
-    return getEntitiesBySlabNo('heatingRecords', currentSlabNo) as HeatingRecord[];
-  }, [currentSlabNo, getEntitiesBySlabNo]);
-
-  const selectedRoughingPasses = useMemo(() => {
-    if (!currentSlabNo) return [];
-    return getEntitiesBySlabNo('roughingPasses', currentSlabNo) as RoughingPass[];
-  }, [currentSlabNo, getEntitiesBySlabNo]);
-
-  const handleCharge = (slab: Slab) => {
-    updateEntity('slabs', slab.id, {
-      status: 'charging',
-      chargingTime: new Date().toISOString().replace('T', ' ').slice(0, 19),
-    });
-  };
-
-  const handleDragStart = (index: number) => {
+  const handleDragStart = useCallback((e: React.DragEvent, index: number) => {
     setDraggedIndex(index);
-  };
+    e.dataTransfer.effectAllowed = 'move';
+  }, []);
 
-  const handleDragOver = (e: React.DragEvent, index: number) => {
+  const handleDragOver = useCallback((e: React.DragEvent, index: number) => {
     e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
     if (draggedIndex === null || draggedIndex === index) return;
-    const newList = [...displayPendingList];
-    const [draggedItem] = newList.splice(draggedIndex, 1);
-    newList.splice(index, 0, draggedItem);
-    setPendingList(newList);
-    setDraggedIndex(index);
-  };
+    setDragOverIndex(index);
+  }, [draggedIndex]);
 
-  const handleDragEnd = () => {
+  const handleDragLeave = useCallback(() => {
+    setDragOverIndex(null);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent, toIndex: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === toIndex) {
+      setDraggedIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+
+    reorderSlabs(draggedIndex, toIndex);
     setDraggedIndex(null);
-  };
+    setDragOverIndex(null);
+  }, [draggedIndex, reorderSlabs]);
+
+  const handleDragEnd = useCallback(() => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  }, []);
+
+  const handleCharge = useCallback((slab: Slab) => {
+    chargeSlab(slab.id);
+  }, [chargeSlab]);
 
   const getSlabStatusBadge = (status: string) => {
     const statusMap: Record<string, 'normal' | 'running' | 'pending' | 'warning' | 'paused'> = {
@@ -139,6 +136,16 @@ export default function SlabCharging() {
     };
     return statusMap[status] || 'pending';
   };
+
+  const chargedStatusOptions: { value: string; label: string }[] = [
+    { value: 'all', label: '全部状态' },
+    { value: 'heating', label: '加热中' },
+    { value: 'rolling', label: '轧制中' },
+    { value: 'cooling', label: '冷却中' },
+    { value: 'coiling', label: '卷取中' },
+    { value: 'inspecting', label: '检验中' },
+    { value: 'finished', label: '已完成' },
+  ];
 
   return (
     <div className="space-y-6">
@@ -158,32 +165,41 @@ export default function SlabCharging() {
               type="text"
               placeholder="搜索板坯号 / 钢种..."
               value={searchKeyword}
-              onChange={(e) => setSearchKeyword(e.target.value)}
+              onChange={(e) => {
+                setSearchKeyword(e.target.value);
+                setCurrentPage(1);
+              }}
               className="w-64 h-9 pl-9 pr-3 bg-[#1e293b] border border-gray-700 rounded-md text-sm text-white placeholder-gray-500 focus:outline-none focus:border-[#e86a2c] transition-colors"
             />
           </div>
-          <div className="relative">
-            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-40 h-9 pl-9 pr-8 bg-[#1e293b] border border-gray-700 rounded-md text-sm text-white focus:outline-none focus:border-[#e86a2c] transition-colors appearance-none cursor-pointer"
-            >
-              <option value="all">全部状态</option>
-              <option value="pending">待入炉</option>
-              <option value="charging">入炉中</option>
-            </select>
-          </div>
+          {activeTab === 'charged' && (
+            <div className="relative">
+              <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+              <select
+                value={chargedStatusFilter}
+                onChange={(e) => {
+                  setChargedStatusFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-40 h-9 pl-9 pr-8 bg-[#1e293b] border border-gray-700 rounded-md text-sm text-white focus:outline-none focus:border-[#e86a2c] transition-colors appearance-none cursor-pointer"
+              >
+                {chargedStatusOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
-        <button className="inline-flex items-center gap-2 h-9 px-4 bg-[#e86a2c] hover:bg-[#d45e24] text-white text-sm font-medium rounded-md transition-colors">
-          <Plus className="w-4 h-4" />
-          新增板坯
-        </button>
       </div>
 
       <div className="flex border-b border-gray-700">
         <button
-          onClick={() => setActiveTab('pending')}
+          onClick={() => {
+            setActiveTab('pending');
+            setCurrentPage(1);
+          }}
           className={`px-5 py-3 text-sm font-medium transition-colors relative ${
             activeTab === 'pending'
               ? 'text-[#e86a2c]'
@@ -199,7 +215,10 @@ export default function SlabCharging() {
           )}
         </button>
         <button
-          onClick={() => setActiveTab('charged')}
+          onClick={() => {
+            setActiveTab('charged');
+            setCurrentPage(1);
+          }}
           className={`px-5 py-3 text-sm font-medium transition-colors relative ${
             activeTab === 'charged'
               ? 'text-[#e86a2c]'
@@ -208,7 +227,7 @@ export default function SlabCharging() {
         >
           已入炉记录
           <span className="ml-2 px-2 py-0.5 text-xs rounded bg-gray-700 text-gray-300">
-            {chargedSlabs.length}
+            {slabs.filter((s) => s.status !== 'pending').length}
           </span>
           {activeTab === 'charged' && (
             <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#e86a2c]" />
@@ -225,66 +244,74 @@ export default function SlabCharging() {
               icon={<ArrowRightToLine className="w-5 h-5" />}
             >
               <div className="space-y-2">
-                {displayPendingList.length === 0 ? (
+                {filteredPendingSlabs.length === 0 ? (
                   <div className="py-12 text-center text-gray-500">
                     <Package className="w-12 h-12 mx-auto mb-3 opacity-30" />
                     <p>暂无待入炉板坯</p>
                   </div>
                 ) : (
-                  displayPendingList.map((slab, index) => (
-                    <div
-                      key={slab.id}
-                      draggable
-                      onDragStart={() => handleDragStart(index)}
-                      onDragOver={(e) => handleDragOver(e, index)}
-                      onDragEnd={handleDragEnd}
-                      onClick={() => setCurrentSlabNo(slab.slabNo)}
-                      className={`flex items-center gap-3 p-3 rounded-md border cursor-move transition-all ${
-                        index % 2 === 0 ? 'bg-[#1e293b]' : 'bg-[#1a2332]'
-                      } border-gray-700 hover:border-[#e86a2c]/50 ${
-                        currentSlabNo === slab.slabNo
-                          ? 'ring-1 ring-[#e86a2c] border-[#e86a2c]'
-                          : ''
-                      } ${draggedIndex === index ? 'opacity-50' : ''}`}
-                    >
-                      <div className="flex-shrink-0 p-1 text-gray-500 hover:text-gray-300">
-                        <GripVertical className="w-4 h-4" />
-                      </div>
-                      <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center bg-gray-700/50 rounded text-sm font-mono text-gray-300">
-                        {index + 1}
-                      </div>
-                      <div className="flex-1 min-w-0 grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <div className="min-w-0">
-                          <div className="text-xs text-gray-500 mb-0.5">板坯号</div>
-                          <div className="text-sm text-white font-mono truncate">{slab.slabNo}</div>
+                  filteredPendingSlabs.map((slab, index) => {
+                    const originalIndex = pendingSlabs.findIndex((s) => s.id === slab.id);
+                    const isDragging = draggedIndex === originalIndex;
+                    const isDragOver = dragOverIndex === originalIndex;
+                    
+                    return (
+                      <div
+                        key={slab.id}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, originalIndex)}
+                        onDragOver={(e) => handleDragOver(e, originalIndex)}
+                        onDragLeave={handleDragLeave}
+                        onDrop={(e) => handleDrop(e, originalIndex)}
+                        onDragEnd={handleDragEnd}
+                        onClick={() => setCurrentSlabNo(slab.slabNo)}
+                        className={`flex items-center gap-3 p-3 rounded-md border cursor-move transition-all ${
+                          index % 2 === 0 ? 'bg-[#1e293b]' : 'bg-[#1a2332]'
+                        } border-gray-700 hover:border-[#e86a2c]/50 ${
+                          currentSlabNo === slab.slabNo
+                            ? 'ring-1 ring-[#e86a2c] border-[#e86a2c]'
+                            : ''
+                        } ${isDragging ? 'opacity-50' : ''} ${
+                          isDragOver && !isDragging ? 'border-[#e86a2c] bg-[#e86a2c]/5' : ''
+                        }`}
+                      >
+                        <div className="flex-shrink-0 p-1 text-gray-500 hover:text-gray-300">
+                          <GripVertical className="w-4 h-4" />
                         </div>
-                        <div>
-                          <div className="text-xs text-gray-500 mb-0.5">钢种</div>
-                          <div className="text-sm text-gray-200">{slab.steelGrade}</div>
+                        <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center bg-gray-700/50 rounded text-sm font-mono text-gray-300">
+                          {originalIndex + 1}
                         </div>
-                        <div>
-                          <div className="text-xs text-gray-500 mb-0.5">规格</div>
-                          <div className="text-sm text-gray-200">
-                            {formatThickness(slab.thickness, 0)} × {formatLength(slab.width)}
+                        <div className="flex-1 min-w-0 grid grid-cols-2 md:grid-cols-4 gap-3">
+                          <div className="min-w-0">
+                            <div className="text-xs text-gray-500 mb-0.5">板坯号</div>
+                            <div className="text-sm text-white font-mono truncate">{slab.slabNo}</div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-gray-500 mb-0.5">钢种</div>
+                            <div className="text-sm text-gray-200">{slab.steelGrade}</div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-gray-500 mb-0.5">规格</div>
+                            <div className="text-sm text-gray-200">
+                              {formatThickness(slab.thickness, 0)} × {formatLength(slab.width)}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-gray-500 mb-0.5">重量</div>
+                            <div className="text-sm text-gray-200">{formatWeight(slab.weight)}</div>
                           </div>
                         </div>
-                        <div>
-                          <div className="text-xs text-gray-500 mb-0.5">重量</div>
-                          <div className="text-sm text-gray-200">{formatWeight(slab.weight)}</div>
+                        <div className="flex-shrink-0 hidden lg:block">
+                          <div className="text-xs text-gray-500 mb-0.5">来源</div>
+                          <div className="text-sm text-gray-200">{slab.source}</div>
                         </div>
-                      </div>
-                      <div className="flex-shrink-0 hidden lg:block">
-                        <div className="text-xs text-gray-500 mb-0.5">来源</div>
-                        <div className="text-sm text-gray-200">{slab.source}</div>
-                      </div>
-                      <div className="flex-shrink-0 flex items-center gap-2">
-                        <StatusBadge
-                          status={getSlabStatusBadge(slab.status)}
-                          label={formatSlabStatus(slab.status)}
-                          size="sm"
-                          showIcon={false}
-                        />
-                        {slab.status === 'pending' && (
+                        <div className="flex-shrink-0 flex items-center gap-2">
+                          <StatusBadge
+                            status={getSlabStatusBadge(slab.status)}
+                            label={formatSlabStatus(slab.status)}
+                            size="sm"
+                            showIcon={false}
+                          />
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -295,10 +322,10 @@ export default function SlabCharging() {
                             <Flame className="w-3.5 h-3.5" />
                             入炉
                           </button>
-                        )}
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </SectionCard>
@@ -319,41 +346,46 @@ export default function SlabCharging() {
                       <th className="pb-3 font-medium whitespace-nowrap">来源</th>
                       <th className="pb-3 font-medium whitespace-nowrap">入炉时间</th>
                       <th className="pb-3 font-medium whitespace-nowrap">状态</th>
-                      <th className="pb-3 font-medium whitespace-nowrap">操作</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {pagedChargedSlabs.map((slab, index) => (
-                      <tr
-                        key={slab.id}
-                        onClick={() => setCurrentSlabNo(slab.slabNo)}
-                        className={`border-b border-gray-800 hover:bg-gray-800/50 cursor-pointer ${
-                          index % 2 === 0 ? 'bg-[#1e293b]/30' : 'bg-transparent'
-                        } ${currentSlabNo === slab.slabNo ? 'bg-[#e86a2c]/10' : ''}`}
-                      >
-                        <td className="py-3 pr-4 text-white font-mono whitespace-nowrap">{slab.slabNo}</td>
-                        <td className="py-3 pr-4 text-gray-300 whitespace-nowrap">{slab.steelGrade}</td>
-                        <td className="py-3 pr-4 text-gray-300 whitespace-nowrap">
-                          {formatThickness(slab.thickness, 0)}×{formatLength(slab.width)}×{formatLength(slab.length)}
-                        </td>
-                        <td className="py-3 pr-4 text-gray-300 whitespace-nowrap">{formatWeight(slab.weight)}</td>
-                        <td className="py-3 pr-4 text-gray-300 whitespace-nowrap">{slab.source}</td>
-                        <td className="py-3 pr-4 text-gray-300 whitespace-nowrap">{formatDateTime(slab.chargingTime)}</td>
-                        <td className="py-3 pr-4 whitespace-nowrap">
-                          <StatusBadge
-                            status={getSlabStatusBadge(slab.status)}
-                            label={formatSlabStatus(slab.status)}
-                            size="sm"
-                            showIcon={false}
-                          />
-                        </td>
-                        <td className="py-3 pr-4 whitespace-nowrap">
-                          <button className="text-[#e86a2c] hover:text-[#ff7f3f] text-xs">
-                            查看详情
-                          </button>
+                    {pagedChargedSlabs.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="py-12 text-center text-gray-500">
+                          <Factory className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                          <p>暂无已入炉记录</p>
                         </td>
                       </tr>
-                    ))}
+                    ) : (
+                      pagedChargedSlabs.map((slab, index) => (
+                        <tr
+                          key={slab.id}
+                          onClick={() => setCurrentSlabNo(slab.slabNo)}
+                          className={`border-b border-gray-800 hover:bg-gray-800/50 cursor-pointer ${
+                            index % 2 === 0 ? 'bg-[#1e293b]/30' : 'bg-transparent'
+                          } ${currentSlabNo === slab.slabNo ? 'bg-[#e86a2c]/10' : ''}`}
+                        >
+                          <td className="py-3 pr-4 text-white font-mono whitespace-nowrap">{slab.slabNo}</td>
+                          <td className="py-3 pr-4 text-gray-300 whitespace-nowrap">{slab.steelGrade}</td>
+                          <td className="py-3 pr-4 text-gray-300 whitespace-nowrap">
+                            {formatThickness(slab.thickness, 0)}×{formatLength(slab.width)}×{formatLength(slab.length)}
+                          </td>
+                          <td className="py-3 pr-4 text-gray-300 whitespace-nowrap">{formatWeight(slab.weight)}</td>
+                          <td className="py-3 pr-4 text-gray-300 whitespace-nowrap">{slab.source}</td>
+                          <td className="py-3 pr-4 text-gray-300 whitespace-nowrap font-mono text-xs">
+                            {formatDateTime(slab.chargingTime)}
+                          </td>
+                          <td className="py-3 pr-4 whitespace-nowrap">
+                            <StatusBadge
+                              status={getSlabStatusBadge(slab.status)}
+                              label={formatSlabStatus(slab.status)}
+                              size="sm"
+                              showIcon={false}
+                            />
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -448,86 +480,7 @@ export default function SlabCharging() {
                 </div>
 
                 <div className="pt-2 border-t border-gray-700">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Flame className="w-4 h-4 text-[#e86a2c]" />
-                    <span className="text-sm font-medium text-white">加热记录摘要</span>
-                  </div>
-                  {selectedHeatingRecords.length === 0 ? (
-                    <div className="text-xs text-gray-500 py-3 text-center bg-[#0f172a] rounded-md border border-gray-700">
-                      暂无加热记录
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {selectedHeatingRecords.slice(0, 3).map((record) => (
-                        <div key={record.id} className="p-3 bg-[#0f172a] rounded-md border border-gray-700">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs text-gray-400">{record.furnaceNo}</span>
-                            <span className={`text-xs ${record.outTime ? 'text-[#2ea043]' : 'text-[#e86a2c]'}`}>
-                              {record.outTime ? '已出炉' : '加热中'}
-                            </span>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2 text-xs">
-                            <div>
-                              <span className="text-gray-500">预热：</span>
-                              <span className="text-gray-300">{record.preheatTemp}℃</span>
-                            </div>
-                            <div>
-                              <span className="text-gray-500">加热：</span>
-                              <span className="text-gray-300">{record.heatingTemp}℃</span>
-                            </div>
-                            <div>
-                              <span className="text-gray-500">均热：</span>
-                              <span className="text-gray-300">{record.soakingTemp}℃</span>
-                            </div>
-                            <div>
-                              <span className="text-gray-500">出炉：</span>
-                              <span className="text-[#e86a2c]">{record.dischargeTemp}℃</span>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="pt-2 border-t border-gray-700">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Factory className="w-4 h-4 text-[#e86a2c]" />
-                    <span className="text-sm font-medium text-white">轧制记录摘要</span>
-                  </div>
-                  {selectedRoughingPasses.length === 0 ? (
-                    <div className="text-xs text-gray-500 py-3 text-center bg-[#0f172a] rounded-md border border-gray-700">
-                      暂无轧制记录
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {selectedRoughingPasses.slice(0, 3).map((pass) => (
-                        <div key={pass.id} className="p-3 bg-[#0f172a] rounded-md border border-gray-700">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs font-medium text-white">第 {pass.passNo} 道次</span>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2 text-xs">
-                            <div>
-                              <span className="text-gray-500">入口：</span>
-                              <span className="text-gray-300">{pass.inletThickness}mm</span>
-                            </div>
-                            <div>
-                              <span className="text-gray-500">出口：</span>
-                              <span className="text-gray-300">{pass.outletThickness}mm</span>
-                            </div>
-                            <div>
-                              <span className="text-gray-500">压下：</span>
-                              <span className="text-[#e86a2c]">{pass.reduction}mm</span>
-                            </div>
-                            <div>
-                              <span className="text-gray-500">轧制力：</span>
-                              <span className="text-gray-300">{pass.rollingForce}kN</span>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  <ProductionTimeline slabNo={selectedSlab.slabNo} />
                 </div>
               </div>
             ) : (
