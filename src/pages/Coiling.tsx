@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useStore } from '@/store/useStore';
 import SectionCard from '@/components/common/SectionCard';
 import DataCard from '@/components/common/DataCard';
@@ -45,6 +46,7 @@ import {
 } from 'recharts';
 
 export default function Coiling() {
+  const navigate = useNavigate();
   const {
     coilingRecords,
     currentSlabNo,
@@ -237,6 +239,7 @@ export default function Coiling() {
           <div className="flex items-center gap-2 ml-auto">
             {compareSlabList.length >= 2 && (
               <button
+                onClick={() => navigate('/slab-compare')}
                 className="inline-flex items-center gap-1.5 h-8 px-3 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white text-sm font-medium rounded-md transition-colors"
               >
                 <GitCompare className="w-4 h-4" />

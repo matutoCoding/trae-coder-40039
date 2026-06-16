@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Package,
   Flame,
@@ -11,6 +12,7 @@ import {
   Check,
   X,
   Clock,
+  GitCompare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useStore } from '@/store/useStore';
@@ -326,6 +328,10 @@ export default function ProductionTimeline({
 }: ProductionTimelineProps) {
   const getEntitiesBySlabNo = useStore((state) => state.getEntitiesBySlabNo);
   const slabs = useStore((state) => state.slabs);
+  const compareSlabNos = useStore((state) => state.compareSlabNos);
+  const navigate = useNavigate();
+
+  const isInCompare = compareSlabNos.includes(slabNo);
 
   const slab = useMemo(
     () => slabs.find((s) => s.slabNo === slabNo),
@@ -644,6 +650,15 @@ export default function ProductionTimeline({
               }[slab.status]
             }
           </span>
+          {isInCompare && (
+            <button
+              onClick={() => navigate('/slab-compare')}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium bg-purple-500/15 border border-purple-500/30 text-purple-400 hover:bg-purple-500/25 transition-colors"
+            >
+              <GitCompare className="w-3.5 h-3.5" />
+              返回对比
+            </button>
+          )}
         </div>
       </div>
 

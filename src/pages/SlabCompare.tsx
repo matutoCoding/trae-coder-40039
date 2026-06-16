@@ -13,6 +13,12 @@ import {
   ShieldCheck,
   Flame,
   BarChart3,
+  Search,
+  Copy,
+  ChevronRight,
+  ArrowUpRight,
+  ArrowDownRight,
+  Minus,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type {
@@ -20,6 +26,7 @@ import type {
   HeatingRecord,
   FinishingRecord,
   CoilingRecord,
+  CoolingRecord,
   InspectionRecord,
 } from '@/types';
 import {
@@ -61,6 +68,7 @@ interface CompareData {
   slab: Slab;
   heating?: HeatingRecord;
   finishing?: FinishingRecord;
+  cooling?: CoolingRecord;
   coiling?: CoilingRecord;
   inspection?: InspectionRecord;
 }
@@ -90,9 +98,10 @@ export default function SlabCompare() {
         if (!slab) return null;
         const heating = (getEntitiesBySlabNo('heatingRecords', slabNo) as HeatingRecord[])[0];
         const finishing = (getEntitiesBySlabNo('finishingRecords', slabNo) as FinishingRecord[])[0];
+        const cooling = (getEntitiesBySlabNo('coolingRecords', slabNo) as CoolingRecord[])[0];
         const coiling = (getEntitiesBySlabNo('coilingRecords', slabNo) as CoilingRecord[])[0];
         const inspection = (getEntitiesBySlabNo('inspectionRecords', slabNo) as InspectionRecord[])[0];
-        return { slab, heating, finishing, coiling, inspection, colorIndex: index };
+        return { slab, heating, finishing, cooling, coiling, inspection, colorIndex: index };
       })
       .filter(Boolean) as (CompareData & { colorIndex: number })[];
   }, [effectiveCompareSlabNos, slabs, getEntitiesBySlabNo]);
@@ -508,6 +517,197 @@ export default function SlabCompare() {
     setCurrentSlabNo(slabNo);
     navigate('/slab-charging');
   };
+
+  const [tracingLabel, setTracingLabel] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const traceConfig: Record<string, { process: string; param: string; getValue: (d: CompareData) => number | null }[][]> = {
+    '出炉温度': [
+      [{ process: '加热炉', param: '出炉温度', getValue: (d) => d.heating?.dischargeTemp ?? null }],
+      [{ process: '精轧机组', param: '终轧温度', getValue: (d) => d.finishing?.finishingTemp ?? null }],
+      [{ process: '层流冷却', param: '冷却前温度', getValue: (d) => d.cooling?.preCoolingTemp ?? null }],
+      [{ process: '卷取打捆', param: '卷取温度', getValue: (d) => d.coiling?.coilingTemp ?? null }],
+      [{ process: '性能检验', param: '-', getValue: () => null }],
+    ],
+    '终轧温度': [
+      [{ process: '加热炉', param: '出炉温度', getValue: (d) => d.heating?.dischargeTemp ?? null }],
+      [{ process: '精轧机组', param: '终轧温度', getValue: (d) => d.finishing?.finishingTemp ?? null }],
+      [{ process: '层流冷却', param: '冷却前温度', getValue: (d) => d.cooling?.preCoolingTemp ?? null }],
+      [{ process: '卷取打捆', param: '卷取温度', getValue: (d) => d.coiling?.coilingTemp ?? null }],
+      [{ process: '性能检验', param: '-', getValue: () => null }],
+    ],
+    '平均厚度': [
+      [{ process: '加热炉', param: '-', getValue: () => null }],
+      [{ process: '精轧机组', param: '头/中/尾厚度', getValue: (d) => d.finishing ? (d.finishing.headThickness + d.finishing.midThickness + d.finishing.tailThickness) / 3 : null }],
+      [{ process: '层流冷却', param: '-', getValue: () => null }],
+      [{ process: '卷取打捆', param: '-', getValue: () => null }],
+      [{ process: '性能检验', param: '-', getValue: () => null }],
+    ],
+    '凸度': [
+      [{ process: '加热炉', param: '-', getValue: () => null }],
+      [{ process: '精轧机组', param: '凸度', getValue: (d) => d.finishing?.crown ?? null }],
+      [{ process: '层流冷却', param: '-', getValue: () => null }],
+      [{ process: '卷取打捆', param: '-', getValue: () => null }],
+      [{ process: '性能检验', param: '-', getValue: () => null }],
+    ],
+    '卷取温度': [
+      [{ process: '加热炉', param: '出炉温度', getValue: (d) => d.heating?.dischargeTemp ?? null }],
+      [{ process: '精轧机组', param: '终轧温度', getValue: (d) => d.finishing?.finishingTemp ?? null }],
+      [{ process: '层流冷却', param: '冷却后温度', getValue: (d) => d.cooling?.postCoolingTemp ?? null }],
+      [{ process: '卷取打捆', param: '卷取温度', getValue: (d) => d.coiling?.coilingTemp ?? null }],
+      [{ process: '性能检验', param: '-', getValue: () => null }],
+    ],
+    '屈服强度': [
+      [{ process: '加热炉', param: '出炉温度', getValue: (d) => d.heating?.dischargeTemp ?? null }],
+      [{ process: '精轧机组', param: '终轧温度', getValue: (d) => d.finishing?.finishingTemp ?? null }],
+      [{ process: '层流冷却', param: '冷却后温度', getValue: (d) => d.cooling?.postCoolingTemp ?? null }],
+      [{ process: '卷取打捆', param: '卷取温度', getValue: (d) => d.coiling?.coilingTemp ?? null }],
+      [{ process: '性能检验', param: '屈服强度', getValue: (d) => d.inspection?.yieldStrength ?? null }],
+    ],
+    '抗拉强度': [
+      [{ process: '加热炉', param: '出炉温度', getValue: (d) => d.heating?.dischargeTemp ?? null }],
+      [{ process: '精轧机组', param: '终轧温度', getValue: (d) => d.finishing?.finishingTemp ?? null }],
+      [{ process: '层流冷却', param: '冷却后温度', getValue: (d) => d.cooling?.postCoolingTemp ?? null }],
+      [{ process: '卷取打捆', param: '卷取温度', getValue: (d) => d.coiling?.coilingTemp ?? null }],
+      [{ process: '性能检验', param: '抗拉强度', getValue: (d) => d.inspection?.tensileStrength ?? null }],
+    ],
+    '延伸率': [
+      [{ process: '加热炉', param: '出炉温度', getValue: (d) => d.heating?.dischargeTemp ?? null }],
+      [{ process: '精轧机组', param: '终轧温度', getValue: (d) => d.finishing?.finishingTemp ?? null }],
+      [{ process: '层流冷却', param: '冷却后温度', getValue: (d) => d.cooling?.postCoolingTemp ?? null }],
+      [{ process: '卷取打捆', param: '卷取温度', getValue: (d) => d.coiling?.coilingTemp ?? null }],
+      [{ process: '性能检验', param: '延伸率', getValue: (d) => d.inspection?.elongation ?? null }],
+    ],
+    '冲击功': [
+      [{ process: '加热炉', param: '出炉温度', getValue: (d) => d.heating?.dischargeTemp ?? null }],
+      [{ process: '精轧机组', param: '终轧温度', getValue: (d) => d.finishing?.finishingTemp ?? null }],
+      [{ process: '层流冷却', param: '冷却后温度', getValue: (d) => d.cooling?.postCoolingTemp ?? null }],
+      [{ process: '卷取打捆', param: '卷取温度', getValue: (d) => d.coiling?.coilingTemp ?? null }],
+      [{ process: '性能检验', param: '冲击功', getValue: (d) => d.inspection?.impactEnergy ?? null }],
+    ],
+  };
+
+  const traceData = useMemo(() => {
+    if (!tracingLabel || !traceConfig[tracingLabel]) return null;
+    const steps = traceConfig[tracingLabel];
+    return steps.map((step) => {
+      const stepInfo = step[0];
+      const values = compareData.map((d) => stepInfo.getValue(d));
+      const numericValues = values.filter((v): v is number => v !== null);
+      const avg = numericValues.length > 0 ? numericValues.reduce((a, b) => a + b, 0) / numericValues.length : null;
+      const deviations = values.map((v) => {
+        if (v === null || avg === null || avg === 0) return 0;
+        return ((v - avg) / avg) * 100;
+      });
+      const deviationPct = numericValues.length >= 2
+        ? numericValues.reduce((sum, v) => sum + Math.abs(v - (avg ?? 0)), 0) / numericValues.length / (avg || 1) * 100
+        : 0;
+      return {
+        process: stepInfo.process,
+        param: stepInfo.param,
+        values,
+        avg,
+        deviations,
+        deviationPct,
+      };
+    });
+  }, [tracingLabel, compareData]);
+
+  const traceArrows = useMemo(() => {
+    if (!traceData) return [];
+    return traceData.map((step, idx) => {
+      if (idx === 0) return 'normal' as const;
+      const prev = traceData[idx - 1];
+      const prevPct = prev.deviationPct;
+      const currPct = step.deviationPct;
+      if (currPct > prevPct + 0.3) return 'amplify' as const;
+      if (currPct < prevPct - 0.3) return 'converge' as const;
+      return 'persist' as const;
+    });
+  }, [traceData]);
+
+  const reportText = useMemo(() => {
+    if (compareData.length < 2) return '';
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const timestamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+    const line = '═══════════════════════════════════════';
+    let report = '';
+    report += `${line}\n`;
+    report += `  热轧带钢质量分析报告\n`;
+    report += `  生成时间：${timestamp}\n`;
+    report += `${line}\n\n`;
+
+    report += `【对比板坯】\n`;
+    compareData.forEach((d) => {
+      report += `  ${d.slab.slabNo} (${d.slab.steelGrade}, ${d.slab.thickness}×${d.slab.width}mm)\n`;
+    });
+    report += '\n';
+
+    if (groupInfo) {
+      report += `【分组信息】\n`;
+      const steelGrades = [...new Set(compareData.map((d) => d.slab.steelGrade))];
+      const sameSteelGrade = steelGrades.length === 1;
+      report += `  钢种分组：${sameSteelGrade ? '同钢种对比（' + steelGrades[0] + '）' : '跨钢种对比（' + steelGrades.join(' / ') + '）'}\n`;
+      const thicknesses = compareData.map((d) => d.slab.thickness);
+      const widths = compareData.map((d) => d.slab.width);
+      const maxT = Math.max(...thicknesses);
+      const minT = Math.min(...thicknesses);
+      const maxW = Math.max(...widths);
+      const minW = Math.min(...widths);
+      const sameSpec = maxT - minT <= 5 && maxW - minW <= 50;
+      report += `  规格分组：${sameSpec ? '同规格对比' : '跨规格对比'}\n\n`;
+    }
+
+    if (deviationRankings.length > 0) {
+      const best = deviationRankings[0];
+      report += `【最稳定板坯】\n`;
+      report += `  ${best.slabNo} - 综合偏差 ${best.overallDeviation.toFixed(2)}%，评级 ${best.rating}\n`;
+      report += `  温度偏差：${best.tempDeviation.toFixed(2)}%，厚度偏差：${best.thicknessDeviation.toFixed(2)}%，性能偏差：${best.performanceDeviation.toFixed(2)}%\n\n`;
+
+      const numericRows = tableRows.filter((r) => r.isNumeric);
+      const riskRows = numericRows
+        .map((row) => {
+          const numericVals = row.values.filter((v): v is number => typeof v === 'number');
+          if (numericVals.length < 2) return null;
+          const avg = numericVals.reduce((a, b) => a + b, 0) / numericVals.length;
+          const maxDev = numericVals.reduce((max, v) => Math.max(max, Math.abs(v - avg) / avg * 100), 0);
+          const maxDevIdx = numericVals.findIndex((v) => Math.abs(v - avg) / avg * 100 === maxDev);
+          const maxDevVal = numericVals[maxDevIdx];
+          const direction = maxDevVal > avg ? '偏高' : '偏低';
+          const worstSlab = compareData[maxDevIdx]?.slab.slabNo ?? '--';
+          return { label: row.label, maxDev, worstSlab, direction };
+        })
+        .filter((r): r is NonNullable<typeof r> => r !== null)
+        .sort((a, b) => b.maxDev - a.maxDev)
+        .slice(0, 3);
+
+      if (riskRows.length > 0) {
+        report += `【最大风险指标】\n`;
+        riskRows.forEach((r) => {
+          report += `  ${r.label} - 最大偏差 ${r.maxDev.toFixed(2)}%，${r.worstSlab} ${r.direction}\n`;
+        });
+        report += '\n';
+      }
+    }
+
+    const steelGrades = [...new Set(compareData.map((d) => d.slab.steelGrade))];
+    if (steelGrades.length === 1 && deviationRankings.length > 0) {
+      const best = deviationRankings[0];
+      report += `【同钢种结论】\n`;
+      report += `  同钢种${steelGrades[0]}板坯中，${best.slabNo}工艺最稳定，\n`;
+      report += `  温度和厚度控制精度最高，建议作为标准工艺参考。\n\n`;
+    } else if (steelGrades.length > 1 && deviationRankings.length > 0) {
+      const worst = deviationRankings[deviationRankings.length - 1];
+      const worstGrade = compareData.find((d) => d.slab.slabNo === worst.slabNo)?.slab.steelGrade ?? '--';
+      report += `【跨钢种结论】\n`;
+      report += `  跨钢种对比显示，${worstGrade}板坯偏差较大（综合偏差${worst.overallDeviation.toFixed(2)}%），\n`;
+      report += `  建议调整冷却制度以提高${worstGrade}的韧性指标。\n\n`;
+    }
+
+    report += `${line}`;
+    return report;
+  }, [compareData, groupInfo, deviationRankings, tableRows]);
 
   return (
     <div className="space-y-6">
@@ -949,6 +1149,7 @@ export default function SlabCompare() {
                       );
                     })}
                     <th className="pb-3 font-medium text-gray-300">平均值</th>
+                    <th className="pb-3 font-medium text-gray-400 w-14 text-center">追溯</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -992,6 +1193,23 @@ export default function SlabCompare() {
                       })}
                       <td className="py-3 pr-4 text-gray-400 font-mono">
                         {row.isNumeric && row.avg !== null ? formatCellValue(row, row.avg) : '--'}
+                      </td>
+                      <td className="py-3 text-center">
+                        {traceConfig[row.label] ? (
+                          <button
+                            onClick={() => setTracingLabel(tracingLabel === row.label ? null : row.label)}
+                            className={`w-7 h-7 rounded-md flex items-center justify-center transition-colors ${
+                              tracingLabel === row.label
+                                ? 'bg-orange-600 text-white'
+                                : 'bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-orange-400'
+                            }`}
+                            title={`追溯${row.label}`}
+                          >
+                            <Search className="w-3.5 h-3.5" />
+                          </button>
+                        ) : (
+                          <span className="text-gray-700 text-xs">-</span>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -1107,6 +1325,109 @@ export default function SlabCompare() {
               </div>
             )}
           </SectionCard>
+
+          {tracingLabel && traceData && (
+            <SectionCard
+              title="异常追溯视图"
+              subtitle={`指标「${tracingLabel}」沿工序链的偏差放大过程追溯`}
+              icon={<Search className="w-5 h-5" />}
+              actions={
+                <button
+                  onClick={() => setTracingLabel(null)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-md transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                  关闭追溯
+                </button>
+              }
+            >
+              <div className="flex items-stretch gap-0 overflow-x-auto pb-2">
+                {traceData.map((step, idx) => {
+                  const arrow = traceArrows[idx];
+                  const isAmplify = arrow === 'amplify';
+                  const isConverge = arrow === 'converge';
+                  const barMaxPct = 10;
+                  return (
+                    <div key={idx} className="flex items-stretch flex-shrink-0">
+                      {idx > 0 && (
+                        <div className="flex flex-col items-center justify-center px-1 min-w-[32px]">
+                          <ChevronRight className="w-4 h-4 text-gray-600" />
+                          <span
+                            className={`text-[10px] font-medium mt-0.5 ${
+                              isAmplify ? 'text-red-400' : isConverge ? 'text-green-400' : 'text-gray-500'
+                            }`}
+                          >
+                            {isAmplify ? '放大↑' : isConverge ? '收敛↓' : '持续─'}
+                          </span>
+                        </div>
+                      )}
+                      <div className="bg-gray-800/60 border border-gray-700/60 rounded-lg p-3 min-w-[150px] flex flex-col gap-2">
+                        <div className="text-xs font-semibold text-white">{step.process}</div>
+                        <div className="text-[11px] text-gray-400">{step.param}</div>
+                        {compareData.map((d, si) => {
+                          const val = step.values[si];
+                          const dev = step.deviations[si];
+                          const color = SLAB_COLORS[si % SLAB_COLORS.length];
+                          const absDev = Math.abs(dev);
+                          const barWidth = Math.min(100, (absDev / barMaxPct) * 100);
+                          const barColor = absDev < 0.5 ? 'bg-green-500/60' : dev > 0 ? 'bg-orange-500/70' : 'bg-blue-500/70';
+                          const dirIcon = absDev < 0.5 ? '─' : dev > 0 ? '↑' : '↓';
+                          const dirColor = absDev < 0.5 ? 'text-gray-500' : dev > 0 ? 'text-orange-400' : 'text-blue-400';
+                          return (
+                            <div key={si} className="flex flex-col gap-0.5">
+                              <div className="flex items-center justify-between">
+                                <span className={`font-mono text-xs ${color.text}`}>
+                                  {val !== null ? (Number.isInteger(val) ? val : val.toFixed(2)) : '-'}
+                                </span>
+                                <span className={`text-[10px] font-semibold ${dirColor}`}>{dirIcon}</span>
+                              </div>
+                              <div className="w-full h-1.5 bg-gray-700/50 rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full transition-all duration-300 ${barColor}`}
+                                  style={{ width: `${Math.max(4, barWidth)}%` }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {step.deviationPct > 0 && (
+                          <div className="text-[10px] text-gray-500 mt-auto pt-1 border-t border-gray-700/40">
+                            偏差幅度：{step.deviationPct.toFixed(2)}%
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </SectionCard>
+          )}
+
+          {reportText && (
+            <SectionCard
+              title="质量分析报告"
+              subtitle="结构化文本报告，可直接复制使用"
+              icon={<BarChart3 className="w-5 h-5" />}
+              actions={
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(reportText).then(() => {
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    });
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-orange-600 hover:bg-orange-500 text-white rounded-md transition-colors"
+                >
+                  <Copy className="w-4 h-4" />
+                  {copied ? '已复制 ✓' : '一键复制'}
+                </button>
+              }
+            >
+              <pre className="bg-gray-950 border border-gray-800 rounded-lg p-4 text-xs text-gray-300 font-mono whitespace-pre overflow-x-auto leading-relaxed">
+                {reportText}
+              </pre>
+            </SectionCard>
+          )}
         </>
       )}
 
